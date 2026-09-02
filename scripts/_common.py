@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import tempfile
 from datetime import datetime, timezone
@@ -20,25 +21,40 @@ def now() -> str:
 
 
 def sha(path: Path) -> str:
-    h = hashlib.sha256()
+    digest = hashlib.sha256()
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(65536), b""):
-            h.update(chunk)
-    return h.hexdigest()
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def safe_rel(value: object, *, directory: bool = False) -> str:
     if not isinstance(value, str) or not value or "\\" in value or "\x00" in value:
         raise ValueError(f"unsafe repository-relative path: {value!r}")
     raw = value[:-1] if directory and value.endswith("/") else value
-    p = PurePosixPath(raw)
-    if not raw or p.is_absolute() or ":" in p.parts[0] or any(x in ("", ".", "..") for x in p.parts):
+    path = PurePosixPath(raw)
+    unsafe = (
+        not raw
+        or path.is_absolute()
+        or ":" in path.parts[0]
+        or any(part in ("", ".", "..") for part in path.parts)
+    )
+    if unsafe:
         raise ValueError(f"unsafe repository-relative path: {value!r}")
-    return p.as_posix() + ("/" if directory else "")
+    return path.as_posix() + ("/" if directory else "")
+
+
+def cli_rel(value: object, *, directory: bool = False) -> str:
+    """Normalize a CLI path while keeping stored path contracts POSIX-only."""
+    if not isinstance(value, str) or re.match(r"^[A-Za-z]:[\\/]", value):
+        raise ValueError(f"unsafe repository-relative path: {value!r}")
+    return safe_rel(value.replace("\\", "/"), directory=directory)
 
 
 def repo_path(root: Path, rel: str) -> Path:
-    root, lexical = root.resolve(), root.resolve() / rel; path = lexical.resolve()
+    root = root.resolve()
+    lexical = root / rel
+    path = lexical.resolve()
     try:
         path.relative_to(root)
     except ValueError as exc:
@@ -61,10 +77,13 @@ def atomic_text(path: Path, text: str) -> None:
     fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
-            stream.write(text.replace("\r\n", "\n")); stream.flush(); os.fsync(stream.fileno())
+            stream.write(text.replace("\r\n", "\n"))
+            stream.flush()
+            os.fsync(stream.fileno())
         os.replace(name, path)
     finally:
-        if os.path.exists(name): os.unlink(name)
+        if os.path.exists(name):
+            os.unlink(name)
 
 
 def atomic_json(path: Path, value: object) -> None:
@@ -72,7 +91,12 @@ def atomic_json(path: Path, value: object) -> None:
 
 
 def git(root: Path, *args: str, check: bool = True, text: bool = False):
-    return subprocess.run(["git", "-C", str(root), *args], check=check, capture_output=True, text=text)
+    return subprocess.run(
+        ["git", "-C", str(root), *args],
+        check=check,
+        capture_output=True,
+        text=text,
+    )
 
 
 def status_bytes(root: Path) -> bytes:

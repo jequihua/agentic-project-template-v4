@@ -36,7 +36,9 @@ python -m unittest discover -s tests
 The last command qualifies the template repository. Exported projects do not
 contain framework tests; their authoritative full command is
 `verification.full` in `roadmap.yaml` and runs through
-`python scripts/verify.py <SLICE>`.
+`python scripts/verify.py <SLICE>`. The default calls
+`scripts/hermetic_verification.py`, which fails closed until the project fills
+its `COMMANDS` argv lists.
 
 frutlups is optional. Its committed example is `frutlups.toml`. Machine-local
 executables live only in ignored `frutlups.local.toml`, whose schema is

@@ -62,7 +62,8 @@ prevention, accessibility, explicit human requirements, or needed tests.
   `AGENTS.md`, `CLAUDE.md`, or `frutlups.toml`.
 - Run focused commands while working and the full command once before finishing.
   Never claim a command passed if you did not observe it pass.
-- Do not commit. End with four lists: changed files; commands run with pass or
+- Do not commit. End with one short paragraph explaining the implemented
+  approach, then exactly four lists: changed files; commands run with pass or
   fail; what could not be verified; deviations from the prompt. State observed
   facts, not a verdict on your own work.
 
@@ -85,6 +86,7 @@ challenge; reviewers close findings; only a human waives.
 
 `pass` requires zero open P0-P2 findings. Use `blocked` when closure belongs to
 another actor or external authority, not merely because work is difficult.
+In a holistic review, every P0-P2 finding id starts with the affected slice id.
 Exactly one verdict line is allowed:
 
 `Verdict: pass|needs_work|blocked - next: <one move>`
@@ -96,6 +98,14 @@ save manual seat output when needed, record reviews, accept slices, and commit
 accepted slices when authorized. They do not rewrite ledger history or accepted
 review evidence. Steering happens by editing the roadmap between slices and
 running `python scripts/roadmap.py check`.
+
+Before admitting work, distinguish the project horizon, admitted milestones,
+and current run boundary. Admit one disposable exact-toolchain slice, establish
+hermetic verification before the baseline, schedule a real user-path smoke test
+at the integration milestone, and express budgets in operational units.
+Prompt generation requires a clean product tree; use `--allow-dirty` only to
+record an exact architect-owned baseline. A blocked review resumes only through
+`ledger.py unblock` by a human or architect, with a recorded reason.
 
 ## Safety
 

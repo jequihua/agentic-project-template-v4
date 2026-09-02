@@ -45,5 +45,6 @@ Full, run once before finishing:
 
 ## Finish
 
-End with four lists: changed files; commands run with pass or fail; what could
+Begin with one short paragraph explaining the implemented approach. Then give
+exactly four lists: changed files; commands run with pass or fail; what could
 not be verified; deviations from this prompt. Facts only.

@@ -35,12 +35,14 @@ handoffs but receives no broader authority.
    leaves the tree for a human; nothing is reverted automatically.
 4. `verify.py` runs the declared full argv and writes a receipt. It appends
    `verified` whether the check passes or fails.
-5. On success, a review prompt carries the receipt, changed-file manifest, and
-   optional notes to a read-only reviewer.
+5. On success, a review prompt carries the receipt, changed-file manifest,
+   bounded code diff, and optional notes to a read-only reviewer.
 6. `ledger.py record` validates the report and appends `reviewed`.
 7. A pass becomes `accept_pending`. The architect accepts it, optionally making
    the exact acceptance commit. Needs-work or failed verification produces a
-   new corrective round; blocked stops for the named owner.
+   new corrective round; blocked stops for the named owner. A human or architect
+   may append `unblocked` with a reason to start the next corrective round while
+   preserving the blocked findings.
 
 Manual and autonomous operation use these same files and transitions. Switching
 is safe between steps because the ledger is read fresh; no conversion exists.
@@ -85,11 +87,12 @@ Human records may additionally use `override`; autonomous reviewers may not.
 
 ## Rounds and reopening
 
-Rounds start at 1. Failed verification or a needs-work review advances the next
-coding prompt to the following round and carries failing command tails or open
-finding rows. Transport failure may retry the same agent job without a new
-prompt event and does not consume a corrective round. Review later rounds only
-against open findings, the delta, and evidence invalidated by that delta.
+Rounds start at 1. Failed verification, a needs-work review, or an authorized
+unblock advances the next coding prompt to the following round and carries the
+relevant command tails, open findings, and unblock reason. Transport failure
+may retry the same agent job without a new prompt event and does not consume a
+corrective round. Review later rounds only against open findings, the delta,
+and evidence invalidated by that delta.
 
 An accepted slice may be reopened only by a human or architect record with a
 reason. Append `reopened` at the next round; never edit the earlier pass or
@@ -100,8 +103,9 @@ acceptance.
 A milestone's slices are accepted only through the ledger. If
 `holistic_review: false`, all accepted slices make it done without a
 `milestone_done` event. If true, a holistic review must pass before that event
-is recorded. A holistic P0-P2 finding names the affected slice; reopen that
-slice and continue its round sequence. Empty work or an empty next frontier is
+is recorded. A holistic P0-P2 finding id starts with the affected slice id. All
+open findings for one slice produce one reopen reason containing every id; then
+continue that slice's round sequence. Empty work or an empty next frontier is
 not completion.
 
 ## Commits

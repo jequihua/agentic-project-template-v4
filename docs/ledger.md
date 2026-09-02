@@ -9,12 +9,13 @@ the ledger and reports its line number. Unknown event fields are refused.
 
 | Event | Required event data |
 | --- | --- |
-| `prompt` | `slice`, `round`, prompt `path`, `sha` |
+| `prompt` | `slice`, `round`, prompt `path`, `sha`; optional dirty `baseline` changed objects |
 | `coded` | `slice`, `round`, `changed` objects (`path`, `sha`, `kind`), optional `notes_path`, seat/time/usage |
 | `verified` | `slice`, `round`, receipt `receipt`, `sha`, `ok` |
 | `reviewed` | `slice`, `round`, `report`, `sha`, `verdict`, open P0-P2 ids, optional seat/time/usage |
 | `accepted` | `slice`, `round`, optional already-known `commit` |
 | `reopened` | `slice`, new `round`, non-empty `reason` |
+| `unblocked` | blocked `slice`, next `round`, non-empty `reason`; human or architect only |
 | `milestone_done` | `milestone`, optional `holistic_report` |
 | `note` | non-empty `text`, optional `slice` |
 | `stop` | `reason`, `detail`; frutlups only |
@@ -31,6 +32,12 @@ event has no hash field). Product paths are mutable: check the most recent
 This detects current drift without invalidating history when a later slice
 legitimately changes the same file.
 
+An optional prompt `baseline` has the same path/SHA/kind objects as `changed`.
+It records dirty state explicitly accepted by the architect at prompt time.
+`coded` excludes an entry only while all three values remain identical; a later
+change is coder work. Stored paths remain repository-relative POSIX paths even
+when a manual CLI accepts Windows backslashes and normalizes them at its edge.
+
 ## Fold
 
 Events are applied in file order for each roadmap slice:
@@ -44,6 +51,7 @@ Events are applied in file order for each roadmap slice:
 | `verified(r, ok=true)` | `reviewing` |
 | `reviewed(r, needs_work)` | `fix`; next prompt is r+1 |
 | `reviewed(r, blocked)` | `blocked` |
+| `unblocked(r+1)` | `fix` at r+1, preserving findings and the unblock reason |
 | `reviewed(r, pass)` | `accept_pending` |
 | `accepted(r)` | `accepted` |
 | `reopened(new r)` | `fix` at new r |
@@ -55,8 +63,11 @@ first non-accepted slice in the first active milestone. A milestone is done when
 all slices are accepted and, when holistic review is configured, a
 `milestone_done` event exists.
 
-Corrective rounds count prompt events above round 1 after failed verification or
-needs-work. A same-round transport retry has no new prompt event.
+Corrective rounds count prompt events above round 1 after failed verification,
+needs-work, or an explicit unblock. A same-round transport retry has no new
+prompt event. Every candidate is schema-validated and folded with the complete
+existing stream before its line is appended; refusal leaves ledger bytes
+unchanged.
 
 ## Verification receipt
 
@@ -89,9 +100,14 @@ under the final verdict heading is:
 `pass` and `override` are refused with open P0-P2. `override` may be recorded
 only with `by=human`.
 
+In a holistic report, every P0-P2 finding id begins with its affected slice id,
+for example `M001-S02-H1-F1`. Open findings are grouped by slice and cause one
+`reopened` event per slice, whose reason retains all grouped ids.
+
 ## Stable status view
 
 `ledger.py status` prints one line per roadmap slice as
 `M001-S01 r1 <step>` followed by `next: <slice-or-none>`. frutlups 0.3 must emit
-the same text for the same roadmap and ledger. `ledger.py index` is a generated
-Markdown table; neither output is another state store.
+the same text for the same roadmap and ledger, including `unblocked` and optional
+prompt `baseline` conformance. `ledger.py index` is a generated Markdown table;
+neither output is another state store.

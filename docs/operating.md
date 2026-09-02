@@ -17,8 +17,11 @@ Never start coding while the roadmap check fails.
 
 ## Manual slice walkthrough
 
-1. `python scripts/prompt.py M001-S01` writes the next coding prompt and appends
-   its `prompt` event. Give that file to a coder.
+1. `python scripts/prompt.py M001-S01` requires a clean product tree, writes the
+   next coding prompt, and appends its `prompt` event. Give that file to a coder.
+   For a deliberate dirty handoff, use `--allow-dirty`; the event records exact
+   path/hash/kind baseline entries so unchanged architect work is not attributed
+   to the coder.
 2. Save the coder's final text as the named optional coder-notes file when it is
    worth retaining. Run
    `python scripts/ledger.py coded M001-S01 --notes <path>`. The script reads Git
@@ -46,6 +49,14 @@ findings or record milestone completion after pass.
 
 Owner reopening uses
 `python scripts/ledger.py reopen M001-S01 --reason "<reason>" --by human`.
+When a blocked review's external decision is resolved, a human or architect
+uses `python scripts/ledger.py unblock M001-S01 --reason "<resolution>"`. This
+preserves its findings and starts the next corrective round. frutlups stops on
+`blocked`; it cannot authorize this transition.
+
+Corrective manual rounds usually have uncommitted reports, receipts, and prior
+product changes. Commit or stash them before the next prompt, or deliberately
+use `prompt.py <slice> --allow-dirty` to capture their exact baseline.
 
 ## Recovery
 
@@ -69,6 +80,19 @@ interruption, inspect Git and the ledger before choosing one move:
 
 `ledger.py check` detects evidence drift. Resolve the cause; do not update hashes
 to silence it.
+
+CLI file arguments may use `/` or `\`; ledger content always stores canonical
+repository-relative POSIX paths. Absolute paths, traversal, and repository
+escapes remain invalid.
+
+## Hermetic verification
+
+`scripts/hermetic_verification.py` is the default project-owned entry point. It
+fails with exit 2 until `COMMANDS` contains real argv lists. Each command runs
+without a shell in a temporary directory outside the repository with `TEMP`,
+`TMP`, `PYTHONDONTWRITEBYTECODE`, and runtime `PROJECT_ROOT` set. It stops at the
+first failure. Replace the placeholder before establishing the project baseline
+and keep the command representative of the declared toolchain.
 
 ## Autonomous operation
 

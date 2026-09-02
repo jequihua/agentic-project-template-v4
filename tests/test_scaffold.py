@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tokenize
 import unittest
 import zipfile
 from pathlib import Path
@@ -39,8 +40,9 @@ EXPECTED = {
     "prompts/for_coding_agent/README.md", "prompts/for_review_agent/README.md",
     "prompts/templates/coding_prompt.md", "prompts/templates/review_prompt.md",
     "questions/README.md", "questions/answered/README.md", "questions/open/README.md",
-    "questions/template_question.md", "scripts/_common.py", "scripts/front_repo.py",
-    "scripts/ledger.py", "scripts/prompt.py", "scripts/roadmap.py", "scripts/verify.py",
+    "questions/template_question.md", "scripts/_common.py", "scripts/_evidence.py",
+    "scripts/front_repo.py", "scripts/hermetic_verification.py", "scripts/ledger.py",
+    "scripts/prompt.py", "scripts/roadmap.py", "scripts/verify.py",
 }
 LIMITS = {
     "AGENTS.md": 8_192, "README.md": 3_072, "ENVIRONMENT.md": 3_072,
@@ -77,10 +79,24 @@ class ScaffoldContractTests(unittest.TestCase):
             self.assertLessEqual(len(lines), 10, n)
             self.assertEqual(len(re.findall(r"^Status: (active|inactive)$", "\n".join(lines), re.M)), 1, n)
 
-        line_limits = {"_common.py": 80, "roadmap.py": 120, "ledger.py": 200,
-                       "verify.py": 150, "prompt.py": 150, "front_repo.py": 350}
-        for name, limit in line_limits.items():
-            self.assertLessEqual(len((ROOT / "scripts" / name).read_text(encoding="utf-8").splitlines()), limit, name)
+        byte_limits = {
+            "_common.py": 4 * 1024,
+            "_evidence.py": 12 * 1024,
+            "roadmap.py": 12 * 1024,
+            "ledger.py": 24 * 1024,
+            "verify.py": 6 * 1024,
+            "prompt.py": 10 * 1024,
+            "front_repo.py": 18 * 1024,
+            "hermetic_verification.py": 6 * 1024,
+        }
+        for name, limit in byte_limits.items():
+            path = ROOT / "scripts" / name
+            self.assertLessEqual(path.stat().st_size, limit, name)
+            source = path.read_text(encoding="utf-8")
+            compile(source, str(path), "exec")
+            self.assertLessEqual(max(map(len, source.splitlines()), default=0), 100, name)
+            tokens = tokenize.generate_tokens(io.StringIO(source).readline)
+            self.assertNotIn(";", (token.string for token in tokens), name)
 
     def test_default_optional_and_removed_surfaces(self) -> None:
         self.assertFalse(any((ROOT / "memory").rglob("*")))
@@ -95,7 +111,7 @@ class ScaffoldContractTests(unittest.TestCase):
             "slice_id", "title", "round", "objective", "acceptance", "non_goals",
             "read_first", "allowed_prefixes", "forbidden", "focused", "full",
             "open_findings", "memory", "diff_manifest", "coder_notes", "receipt",
-            "prior_findings", "report_path",
+            "diff_evidence", "prior_findings", "report_path", "finding_id_rule",
         }
         for rel in ("prompts/templates/coding_prompt.md", "prompts/templates/review_prompt.md"):
             found = set(re.findall(r"{{([a-z_]+)}}", (ROOT / rel).read_text(encoding="utf-8")))
@@ -108,7 +124,8 @@ class ScaffoldContractTests(unittest.TestCase):
     def test_archive_excludes_template_tests(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             source, archive = Path(td) / "source", Path(td) / "project.zip"
-            for rel in EXPECTED | {"tests/test_scaffold.py"}:
+            tests = {"tests/test_scaffold.py", "tests/test_remediation.py"}
+            for rel in EXPECTED | tests:
                 target = source / rel; target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(ROOT / rel, target)
             git_init(source)
@@ -239,7 +256,7 @@ class ManualLoopTests(unittest.TestCase):
             needs = PASS_REPORT.replace("| --- | --- | --- | --- |", "| --- | --- | --- | --- |\n| M001-S01-R1-F1 | P1 | open | tighten behavior |").replace("Verdict: pass - next: accept the slice", "Verdict: needs_work - next: fix F1 and re-verify")
             report.write_text(needs, encoding="utf-8")
             self.assertEqual(quiet_call(ledger.main, ["--root", str(root), "record", report.relative_to(root).as_posix()]), 0)
-            corrective = (root / prompt.coding(root, "M001-S01")).read_text(encoding="utf-8"); self.assertIn("M001-S01-R1-F1", corrective)
+            corrective = (root / prompt.coding(root, "M001-S01", True)).read_text(encoding="utf-8"); self.assertIn("M001-S01-R1-F1", corrective)
             feature.write_text("done better\n", encoding="utf-8"); self.assertEqual(quiet_call(ledger.main, ["--root", str(root), "coded", "M001-S01"]), 0)
             self.assertTrue(verify.run(root, "M001-S01", 10)[0]["ok"]); prompt.review(root, "M001-S01")
             report2 = root / "05_governance/reviews/m001/M001-S01_r2_review.md"; report2.write_text(PASS_REPORT.replace("round 1", "round 2"), encoding="utf-8")

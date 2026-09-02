@@ -10,6 +10,8 @@ paths to front paths. Directory mappings may carry `exclude` globs relative to
 their own source. Global ignore rules cover names, suffixes, and basenames. The
 tool rejects missing sources, traversal, symlinks, source/destination overlap,
 and writes outside the resolved destination.
+At least one `[[files]]` or `[[directories]]` mapping must be active; an empty
+manifest is refused with the exact configuration to add.
 
 ## Commands
 

@@ -17,7 +17,8 @@ Expand-Archive ..\my-project.zip ..\my-project
 
 Then edit `00_brief/`, replace the example `roadmap.yaml`, choose active
 workspace statuses, record decisions, and set a real project-owned
-`verification.full` command. Run:
+`verification.full` command. The provided hermetic entry point fails closed
+until its `COMMANDS` list is customized. Run:
 
 ```powershell
 python scripts/roadmap.py check
@@ -38,6 +39,8 @@ python scripts/ledger.py accept M001-S01 --commit
 The architect hands the generated coding/review prompts to the chosen agents.
 Without `--commit`, acceptance changes only the ledger. See
 `docs/operating.md` for rounds, recovery, holistic review, and autonomous use.
+If a review is blocked, a human or architect can resume the next round with
+`ledger.py unblock <slice> --reason <resolution>`.
 
 ## Sources of truth
 

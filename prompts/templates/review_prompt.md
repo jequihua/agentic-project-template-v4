@@ -13,6 +13,10 @@ evidence; do not rerun verification unless this prompt explicitly says so.
 
 {{diff_manifest}}
 
+## Code diff
+
+{{diff_evidence}}
+
 ## Coder notes
 
 {{coder_notes}}
@@ -49,3 +53,4 @@ Verdict: pass|needs_work|blocked - next: one move
 ```
 
 Use one allowed value on each choice line. A pass requires zero open P0-P2.
+{{finding_id_rule}}
