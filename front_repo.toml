@@ -1,0 +1,20 @@
+# Curated projection into a separate front-facing repository.
+# Sources are relative to this repository; targets are relative to the front repo.
+# Leave the target empty and pass --target-repo for portability.
+
+[settings]
+target = ""
+
+[ignore]
+names = ["__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "build", "dist"]
+suffixes = [".pyc", ".pyo"]
+globs = ["*.egg-info", ".codex_tmp*"]
+
+# [[files]]
+# source = "07_app/README.md"
+# target = "README.md"
+
+# [[directories]]
+# source = "07_app/src"
+# target = "src"
+# exclude = ["fixtures/private/**", "generated/**"]

@@ -1,23 +1,7 @@
-# Workspace: 05_governance
+# Workspace: governance
 
-Status: active core workspace.
+Status: active
 
-Purpose: record decisions, risks, assumptions, costs, reviews, verdicts, human
-owner notes, and current operating protocols.
-
-Read first:
-- `current/review_protocol.md`
-- `current/question_policy.md`
-- `reviews/INDEX.md`
-- `decision_log.md`
-
-Review routing note: `05_governance/reviews/INDEX.md` is the canonical review
-routing surface;
-`review_log.md` is a pointer-only compatibility artifact and takes no routine
-review entries.
-
-Does not belong here:
-- implementation source;
-- current project state that belongs in `PROJECT_STATE.md`;
-- local secrets.
-
+`ledger.jsonl` is append-only loop history. `backlog.md` carries P3 findings.
+Reviews and verification receipts live under `reviews/mNNN/`; human rulings live
+under `human_owner_notes/`. Implementation source does not belong here.

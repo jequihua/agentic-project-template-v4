@@ -1,4 +1,3 @@
-# Open Questions
+# Open questions
 
-Open question artifacts live here. Start from
-`questions/template_question.md` and add a row to `questions/INDEX.md`.
+Unanswered blocker questions live here.

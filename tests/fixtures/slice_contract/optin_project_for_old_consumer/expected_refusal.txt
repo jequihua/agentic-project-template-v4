@@ -1,9 +1,0 @@
-workflow metadata slot 'milestone' is missing
-workflow metadata slot 'slice' is missing
-expected slot missing in section 'active workspaces'
-expected slot missing in section 'read first'
-expected slot missing in section 'task'
-expected slot missing in section 'non-goals'
-expected slot missing in section 'verification'
-expected slot missing in section 'self-report'
-expected slot missing in section 'definition of done'

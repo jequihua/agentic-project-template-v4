@@ -1,0 +1,42 @@
+schema: frutlups.roadmap/1
+project: replace-with-project-slug
+brief: 00_brief/
+verification:
+  full: [python, scripts/hermetic_verification.py]
+  focused_default: []
+allowed_prefixes: [07_app/]
+forbidden:
+  - 00_brief/
+  - 05_governance/
+  - prompts/
+  - questions/answered/
+  - roadmap.yaml
+  - frutlups.toml
+  - AGENTS.md
+  - CLAUDE.md
+review:
+  ordinary: [reviewer]
+  high: [claude_reviewer]
+  release: [reviewer, claude_reviewer]
+milestones:
+  - id: M001
+    title: First project milestone
+    status: active
+    risk: ordinary
+    holistic_review: true
+    slices:
+      - id: M001-S01
+        title: Replace this example with the first bounded slice
+        objective: >
+          Deliver one reviewable project change inside the declared write
+          boundary.
+        acceptance:
+          - Replace this example with observable acceptance criteria.
+        non_goals:
+          - Work outside the first slice.
+        read_first:
+          - 00_brief/CONTEXT.md
+        focused: []
+        kind: code
+ruled_out: []
+not_yet_specified: []

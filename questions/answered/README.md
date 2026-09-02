@@ -1,5 +1,3 @@
-# Answered Questions
+# Answered questions
 
-Answered question artifacts move here from `questions/open/`, keeping their
-filename. Update the matching `questions/INDEX.md` row with the answer
-artifact.
+Move answered question files here without rewriting their history.

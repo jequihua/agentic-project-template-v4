@@ -1,4 +1,0 @@
-# Feature Scope
-
-Status: placeholder.
-

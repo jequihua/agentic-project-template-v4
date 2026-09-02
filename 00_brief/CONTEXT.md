@@ -1,17 +1,6 @@
-# Workspace: 00_brief
+# Workspace: brief
 
-Status: active core workspace.
+Status: active
 
-Purpose: define the problem, scope, constraints, success criteria, assumptions,
-and non-goals.
-
-Read first:
-- `problem_statement.md`
-- `success_metrics.md`
-- `constraints.md`
-- `glossary.md`
-
-Does not belong here:
-- implementation details;
-- review reports;
-- live project state that belongs in `PROJECT_STATE.md`.
+Read `intake.md`, `constraints.md`, and `decisions.md` for project authority.
+Implementation, reviews, and live loop state do not belong here.

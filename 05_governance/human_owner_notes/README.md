@@ -1,7 +1,4 @@
-# Human Owner Notes
+# Human owner notes
 
-Use this folder for explicit human rulings, preferences, and stop/go decisions
-that should be visible to agents.
-
-Do not rely on chat alone for durable project authority.
-
+Record dated human rulings here. Cite the note from `00_brief/decisions.md` when
+it changes a durable project decision. Scripts do not parse these notes.

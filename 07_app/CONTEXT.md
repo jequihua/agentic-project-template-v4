@@ -1,9 +1,4 @@
-# Workspace: 07_app
-
-Status: inactive unless application work is activated.
-
-Purpose: hold app, dashboard, API, or human review interface artifacts.
-
-Read first when active:
-- `app_description.md`
-
+# Workspace: application
+Status: active
+Default example write boundary for product code.
+Replace this text and the roadmap boundary during intake.

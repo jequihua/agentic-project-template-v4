@@ -1,6 +1,4 @@
-# Review Prompts
+# Review prompts
 
-Review prompts belong here when the project is ready to review a coding pass.
-
-For v2, prefer focused review prompts. Do not restate the whole project history.
-
+`scripts/prompt.py <SLICE> --review` writes numbered, read-only review prompts
+here. Review reports belong under `05_governance/reviews/`.

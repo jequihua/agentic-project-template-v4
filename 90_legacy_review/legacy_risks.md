@@ -1,4 +1,0 @@
-# Legacy Risks
-
-Status: placeholder.
-

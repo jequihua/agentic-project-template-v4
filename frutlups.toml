@@ -1,0 +1,38 @@
+# Optional autonomous-run configuration. Manual scripts never read this file.
+schema = "frutlups/1"
+until = "milestone"
+max_corrective_rounds = 2
+max_jobs = 60
+max_wall_minutes = 480
+commit_on_accept = true
+prompt_dir = "prompts/for_coding_agent"
+review_prompt_dir = "prompts/for_review_agent"
+reviews_dir = "05_governance/reviews"
+ledger = "05_governance/ledger.jsonl"
+
+[seats.coder]
+adapter = "pi"
+provider = "openai-codex"
+model = "gpt-5.6-sol"
+effort = "medium"
+corrective_effort = "high"
+
+[seats.reviewer]
+adapter = "claude"
+model = "opus"
+effort = "high"
+
+[seats.claude_reviewer]
+adapter = "claude"
+model = "opus"
+effort = "high"
+
+[seats.holistic]
+adapter = "claude"
+model = "opus"
+effort = "high"
+
+[timeouts]
+coder_seconds = 2400
+reviewer_seconds = 1800
+verification_seconds = 1800

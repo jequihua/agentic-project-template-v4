@@ -1,34 +1,27 @@
-# === Local state ===
-local_state/
-.local/
-# frutlups-drive run store (immutable lifecycles, STOP sentinel); governed local surface
-.frutlups_drive/
+# Local operation
+local_state/*
+!local_state/README.md
+frutlups.local.toml
 
-# === Python caches and build ===
+# Python, tests, builds, and dependencies
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-dist/
-build/
-*.egg-info/
-
-# === Test / coverage output ===
 .coverage
 coverage.xml
 htmlcov/
-test-results/
-test-results.xml
-
-# === Virtual environments and dependencies ===
+build/
+dist/
+*.egg-info/
 .venv/
 .venv*/
 venv/
 env/
 node_modules/
 
-# === Local env and secrets ===
+# Secrets and machine-local material
 .env
 .env.*
 *.pem
@@ -40,40 +33,24 @@ secrets*
 *credentials*.json
 service-account*.json
 
-# === Local memory roots ===
-llloom_memory/
-memory_root/
-
-# === Logs, temp, and bulky generated work ===
+# Logs, temp, editor, and OS noise
 *.log
 tmp/
 temp/
-generated/
-# Exception: track ONLY the single navigation read model (disposable,
-# byte-reproducible from 08_pkg/okf_navigation_manifest.json). Everything else under
-# 08_pkg/generated/ — including atomic-write .okfnav-*.tmp residue — stays ignored.
-!/08_pkg/generated/
-/08_pkg/generated/*
-!/08_pkg/generated/okf_navigation.md
-*_work/
-*_graphab_work/
-
-# === Tool caches ===
 .cache/
 .tox/
 .nox/
-
-# === Merge and backup residue ===
 *.orig
 *.rej
 *.bak
-
-# === Notebook checkpoints ===
 .ipynb_checkpoints/
-
-# === OS / editor noise ===
 .DS_Store
 Thumbs.db
 desktop.ini
 .vscode/
 .idea/
+
+# Enable these only when roadmap.yaml declares the llloom memory lane.
+# memory/llloom/state/search/
+# memory/llloom/state/graph/
+# memory/llloom/state/locks/

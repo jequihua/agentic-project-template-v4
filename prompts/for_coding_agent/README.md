@@ -1,7 +1,4 @@
-# Coding Prompts
+# Coding prompts
 
-Coding prompts belong here after project intake creates a narrow implementation
-slice.
-
-Keep this folder empty except for this README until the architect/reviewer has
-defined the project and written the first prompt.
+`scripts/prompt.py <SLICE>` writes numbered coding prompts here. State and round
+come from the ledger, never from filenames.
