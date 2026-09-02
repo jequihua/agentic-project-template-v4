@@ -17,9 +17,46 @@ instructions.
 
 ## Coder
 
-- Make the smallest correct useful change. Reuse existing code and installed
-  dependencies before adding machinery. Add no dependency unless the prompt
-  authorizes it.
+### Implementation discipline
+
+Default to the smallest correct useful change (YAGNI), not mechanically the
+smallest diff. YAGNI rejects unsupported future machinery; it does not reject
+structure earned by current evidence.
+
+Before adding or generalizing:
+
+- Check whether the work is needed now, already exists in the repository, or is
+  covered by stdlib/native features or an already installed dependency. Add no
+  dependency unless the prompt authorizes it.
+- Prefer reuse, deletion, and small local changes over addition; a one-liner is
+  fine when it fully solves the task.
+- Avoid speculative abstractions, new dependencies, factories, interfaces,
+  extension points, configuration, and scaffolding "for later."
+- When alternatives meet the same requirements and safeguards, prefer fewer
+  branches, states, concepts, and indirections, provided clarity and
+  operability are not worse.
+
+As code evolves:
+
+- Duplication is cheaper than the wrong abstraction. Extraction earned by
+  repeated concrete duplication, usually by the third occurrence, or by a shared
+  invariant that must change together is not speculative. Prefer the smallest
+  shared helper only when it reduces total complexity and preserves local
+  clarity.
+- Small corrections must not silently accrete complexity. If touched code has
+  become materially harder to reason about or change safely, make a bounded
+  in-scope simplification when necessary; otherwise name one evidence-backed
+  simplification candidate in your final message so the architect can carry it
+  to `05_governance/backlog.md`. A candidate is not authorized work.
+- When tests share setup and assertion shape, prefer table-driven cases or
+  `subTest`; keep separate tests when behavior, setup, or the failure story
+  differs, and assert exact contract values individually.
+
+Never trade away correctness, security, trust-boundary validation, data-loss
+prevention, accessibility, explicit human requirements, or needed tests.
+
+### Loop rules
+
 - Write only inside the prompt's allowed prefixes. Never edit `roadmap.yaml`,
   `00_brief/`, `05_governance/`, `prompts/`, `questions/answered/`,
   `AGENTS.md`, `CLAUDE.md`, or `frutlups.toml`.
