@@ -1,8 +1,13 @@
 """Validate, query, and render the project roadmap authority."""
 
-import argparse, copy, re, sys
+import argparse
+import copy
+import re
+import sys
 from pathlib import Path
+
 import yaml
+
 import _common as c
 
 TOP = {

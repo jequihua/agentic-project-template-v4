@@ -27,6 +27,7 @@ import roadmap  # noqa: E402
 import verify  # noqa: E402
 
 EXPECTED = {
+    ".editorconfig",
     ".gitattributes",
     ".gitignore",
     "AGENTS.md",
@@ -116,6 +117,12 @@ class ScaffoldContractTests(unittest.TestCase):
 
     def test_control_files_and_budgets(self) -> None:
         self.assertEqual((ROOT / "CLAUDE.md").read_bytes(), b"@AGENTS.md\n")
+        editorconfig = (ROOT / ".editorconfig").read_text(encoding="utf-8")
+        self.assertIn("root = true", editorconfig)
+        self.assertIn("[*.{bat,cmd}]\nend_of_line = crlf", editorconfig)
+        attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+        self.assertIn("*.bat text eol=crlf", attributes)
+        self.assertIn("*.cmd text eol=crlf", attributes)
         for rel, limit in LIMITS.items():
             self.assertLessEqual((ROOT / rel).stat().st_size, limit, rel)
         for n in (

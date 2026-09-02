@@ -5,6 +5,8 @@
 *.py text eol=lf
 *.toml text eol=lf
 *.yaml text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
 
 # Framework qualification stays in the template repository, not projects.
 /tests export-ignore

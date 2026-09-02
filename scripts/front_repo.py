@@ -1,7 +1,16 @@
 """Safely project selected development-repository files into a front repository."""
 
-import argparse, fnmatch, hashlib, json, os, re, shutil
-import subprocess, sys, tempfile, tomllib
+import argparse
+import fnmatch
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import tomllib
 from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
