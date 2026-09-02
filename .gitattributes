@@ -1,0 +1,24 @@
+# Standalone template checkout: when this clean template becomes the root of its own Git
+# repository, the complete tree — including this .gitattributes and every descendant —
+# checks out LF on every platform so the 151-file release ledger is byte-deterministic
+# regardless of core.autocrlf. `text=auto` keeps a future binary asset from being
+# corrupted; this is a scoped LF contract, not a blanket byte rewrite.
+* text=auto eol=lf
+
+# The generated navigation read model must stay LF on every platform so its bytes
+# match the standard-library generator's output (scripts/generate_okf_navigation.py)
+# and `--check` stays deterministic regardless of core.autocrlf.
+08_pkg/generated/okf_navigation.md text eol=lf
+
+# OKF/profile byte boundary: the reusable framework-profile contract, public API
+# contract, authoring guide, dependency metadata, profile checker/adapter, and the
+# full golden-fixture corpus check out LF on every platform so their bytes stay
+# stable under core.autocrlf=true or false. Explicit boundary rules — not a
+# repository-wide EOL rewrite.
+08_pkg/okf_profile_v0_1.md text eol=lf
+08_pkg/public_api_contract.md text eol=lf
+docs/template_framework/okf_authoring_and_migration.md text eol=lf
+pyproject.toml text eol=lf
+scripts/artifact_integrity_preflight.py text eol=lf
+scripts/okf_yaml_profile.py text eol=lf
+tests/fixtures/okf_profile/** text eol=lf

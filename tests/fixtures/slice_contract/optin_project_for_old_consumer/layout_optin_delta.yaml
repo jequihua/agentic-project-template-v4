@@ -1,0 +1,3 @@
+# Applied to frutlups.layout.yaml by compose.py as the opt-in step (together with the sidecars):
+prompts:
+  coding_template: "prompts/templates/coding_prompt_contract_v1.md"

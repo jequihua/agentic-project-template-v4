@@ -1,0 +1,50 @@
+# Front-facing repo sync manifest (EXAMPLE — adapt to your project profile).
+#
+# - source paths are relative to the DEVELOPMENT repo root (this template root)
+#   and MUST resolve inside it: no `../` escape, no outside-repo absolute paths.
+# - target paths are relative to the FRONT-FACING repo root (a separate, outside repo).
+# - the front-facing repo lives OUTSIDE the development repo; never nest them.
+# - this manifest is a curated projection, not a full mirror of the dev repo.
+# - the same manifest is used by bootstrap_front_repo.py (first copy) and
+#   sync_front_repo.py (ongoing sync).
+#
+# Do NOT hardcode a machine-local default path here. Leave defaults empty and pass
+# --output-dir / --target-repo on the command line, or set a project-local default.
+
+[settings]
+default_target = ""            # set per project, or pass --target-repo
+default_bootstrap_output = ""  # set per project, or pass --output-dir
+
+[ignore]
+names = ["__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "build", "dist"]
+suffixes = [".pyc", ".pyo"]
+globs = ["*.egg-info", ".codex_tmp*"]
+
+# Single-file mappings (source file -> target file).
+[[files]]
+source = "08_pkg/README.md"
+target = "README.md"
+
+[[files]]
+source = "08_pkg/pyproject.toml"
+target = "pyproject.toml"
+
+[[files]]
+source = "scripts/front_repo_sync/front_repo_gitignore"
+target = ".gitignore"
+
+# Directory mirrors (source dir -> target dir). Stale files inside a managed
+# target directory are deleted so the projection stays clean.
+[[directories]]
+source = "08_pkg/src"
+target = "src"
+
+[[directories]]
+source = "08_pkg/tests"
+target = "tests"
+
+# Explicit one-off stale deletes (optional). Each must list a target path and a
+# reason; only applied if the target exists.
+# [[stale]]
+# target = "old_module.py"
+# reason = "renamed in the development repo"

@@ -1,0 +1,56 @@
+slice_prompt_contract_version: 1
+roadmap: active_roadmap.md
+slices:
+- slice: M001-S01
+  title: Add the bounded route-cost ledger
+  milestone: M001
+  authored_by: architect_reviewer
+  status: ready
+  dispatch_authority: 05_governance/human_owner_notes/002_2026-08-26_m001_s01_dispatch.md
+  strictness: Level 3
+  mode: normal implementation
+  live: false
+  corrective: false
+  task: 'Implement the route-cost ledger writer in the package and cover it with
+
+    table-driven tests. Preserve the existing CLI surface.
+
+    '
+  active_workspaces:
+  - 08_pkg
+  - 05_governance
+  read_first:
+  - PROJECT_STATE.md
+  - 08_pkg/CONTEXT.md
+  writes:
+  - path: 08_pkg/src/routing/route_cost.py
+    artifact_type: implementation
+    role_owner: coder
+    retry_policy: modify
+  - path: 08_pkg/tests/test_route_cost.py
+    artifact_type: test
+    role_owner: coder
+    retry_policy: create_once
+  - path: 05_governance/reviews/m001/m001_s01_route_cost_ledger_self_report.md
+    artifact_type: self_report
+    role_owner: coder
+    retry_policy: create_once
+  non_goals:
+  - No router policy change
+  - No live Graphab execution
+  verification:
+  - python -m unittest discover -s 08_pkg/tests
+  - python scripts/artifact_integrity_preflight.py 05_governance/reviews/m001/m001_s01_route_cost_ledger_self_report.md
+  opening_gates: none
+  external_inputs: none
+  candidate_identity: none
+  correction: none
+  execution_envelope: none
+  objective:
+    success_criteria:
+    - The ledger records one row per admitted route with monotonic timestamps
+    closure_proof:
+    - A passing focused test run cited in the self-report
+  definition_of_done:
+  - Ledger writer implemented and tested
+  - Self-report written at the manifest path

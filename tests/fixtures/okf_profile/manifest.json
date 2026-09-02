@@ -1,0 +1,844 @@
+{
+  "fixtures": [
+    {
+      "description": "Fuller accepted concept exercising recommended and optional canonical fields.",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "pass"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "pass"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        }
+      },
+      "id": "accepted_full",
+      "path": "tests/fixtures/okf_profile/accepted_full.md",
+      "tags": [
+        "accepted",
+        "full"
+      ]
+    },
+    {
+      "description": "Minimal profile-conformant concept: registry type and pinned version only.",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "pass"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "pass"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        }
+      },
+      "id": "accepted_minimal",
+      "path": "tests/fixtures/okf_profile/accepted_minimal.md",
+      "tags": [
+        "accepted",
+        "minimal"
+      ]
+    },
+    {
+      "description": "Well-formed OKF concept with a registry type but no framework_profile field: OKF pass, profile not_applicable (not opted into the profile).",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "not_applicable"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "not_applicable"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        }
+      },
+      "id": "accepted_no_profile_field",
+      "path": "tests/fixtures/okf_profile/accepted_no_profile_field.md",
+      "tags": [
+        "accepted",
+        "no_framework_profile",
+        "unprofiled"
+      ]
+    },
+    {
+      "description": "Double-quoted numeric-looking string is a canonical string scalar (the accepted counterpart to a bare leading-zero numeric).",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "pass"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "pass"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        }
+      },
+      "id": "accepted_quoted_numeric",
+      "path": "tests/fixtures/okf_profile/accepted_quoted_numeric.md",
+      "tags": [
+        "accepted",
+        "quoted_numeric",
+        "scalar_typing"
+      ]
+    },
+    {
+      "description": "Carries an unknown extension key, tolerated on read; still fully conformant.",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "pass"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "pass"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        }
+      },
+      "id": "accepted_unknown_extension",
+      "path": "tests/fixtures/okf_profile/accepted_unknown_extension.md",
+      "tags": [
+        "accepted",
+        "unknown_extension"
+      ]
+    },
+    {
+      "description": "Anchors and aliases are valid YAML but out of subset.",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_YAML_OUT_OF_SUBSET",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_YAML_OUT_OF_SUBSET",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": "OKF_YAML_UNSUPPORTED",
+            "result": "unverified"
+          }
+        }
+      },
+      "id": "anchors_aliases",
+      "path": "tests/fixtures/okf_profile/anchors_aliases.md",
+      "tags": [
+        "anchors_aliases",
+        "out_of_subset"
+      ]
+    },
+    {
+      "description": "Duplicate mapping key: subset unverified, full parser conclusively OKF fail; profile fail. The pinned contract assigns no OKF reason code to the full-parser fail, so its reason is null.",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_YAML_OUT_OF_SUBSET",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": "OKF_YAML_INVALID",
+            "result": "fail"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_YAML_OUT_OF_SUBSET",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": "OKF_YAML_UNSUPPORTED",
+            "result": "unverified"
+          }
+        }
+      },
+      "id": "duplicate_key",
+      "path": "tests/fixtures/okf_profile/duplicate_key.md",
+      "tags": [
+        "duplicate_key",
+        "out_of_subset"
+      ]
+    },
+    {
+      "description": "Flow collection is valid YAML but out of subset.",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_YAML_OUT_OF_SUBSET",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_YAML_OUT_OF_SUBSET",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": "OKF_YAML_UNSUPPORTED",
+            "result": "unverified"
+          }
+        }
+      },
+      "id": "flow_collection",
+      "path": "tests/fixtures/okf_profile/flow_collection.md",
+      "tags": [
+        "flow_collection",
+        "out_of_subset"
+      ]
+    },
+    {
+      "description": "Opening --- with no closing ---: conclusively malformed OKF_FRONTMATTER_MISSING (not legacy).",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "not_applicable"
+          },
+          "okf_concept": {
+            "reason": "OKF_FRONTMATTER_MISSING",
+            "result": "fail"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "not_applicable"
+          },
+          "okf_concept": {
+            "reason": "OKF_FRONTMATTER_MISSING",
+            "result": "fail"
+          }
+        }
+      },
+      "id": "frontmatter_unterminated",
+      "path": "tests/fixtures/okf_profile/frontmatter_unterminated.md",
+      "tags": [
+        "frontmatter_boundary",
+        "malformed",
+        "okf_fail"
+      ]
+    },
+    {
+      "description": "Plain Markdown with no opening frontmatter delimiter: legacy non-OKF fallback before L1; OKF not evaluated, profile not_applicable.",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "not_applicable"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "not_evaluated"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "not_applicable"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "not_evaluated"
+          }
+        }
+      },
+      "id": "legacy_no_frontmatter",
+      "path": "tests/fixtures/okf_profile/legacy_no_frontmatter.md",
+      "tags": [
+        "legacy"
+      ]
+    },
+    {
+      "description": "Merge keys are valid YAML but out of subset.",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_YAML_OUT_OF_SUBSET",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_YAML_OUT_OF_SUBSET",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": "OKF_YAML_UNSUPPORTED",
+            "result": "unverified"
+          }
+        }
+      },
+      "id": "merge_keys",
+      "path": "tests/fixtures/okf_profile/merge_keys.md",
+      "tags": [
+        "merge_keys",
+        "out_of_subset"
+      ]
+    },
+    {
+      "description": "Moved-path pair (before): stable framework_id fid-move-001, concept ID moved/original.",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "pass"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "pass"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        }
+      },
+      "id": "moved_original",
+      "path": "tests/fixtures/okf_profile/moved/original.md",
+      "tags": [
+        "accepted",
+        "moved_path"
+      ]
+    },
+    {
+      "description": "Moved-path pair (after): identical framework_id fid-move-001, distinct concept ID moved/relocated.",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "pass"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "pass"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        }
+      },
+      "id": "moved_relocated",
+      "path": "tests/fixtures/okf_profile/moved/relocated.md",
+      "tags": [
+        "accepted",
+        "moved_path"
+      ]
+    },
+    {
+      "description": "Bare leading-zero numeric: out-of-subset scalar (accepted counterpart is accepted_quoted_numeric).",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_YAML_OUT_OF_SUBSET",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_YAML_OUT_OF_SUBSET",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": "OKF_YAML_UNSUPPORTED",
+            "result": "unverified"
+          }
+        }
+      },
+      "id": "scalar_leading_zero",
+      "path": "tests/fixtures/okf_profile/scalar_leading_zero.md",
+      "tags": [
+        "out_of_subset",
+        "scalar_typing"
+      ]
+    },
+    {
+      "description": "Unquoted native timestamp: out-of-subset scalar.",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_YAML_OUT_OF_SUBSET",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_YAML_OUT_OF_SUBSET",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": "OKF_YAML_UNSUPPORTED",
+            "result": "unverified"
+          }
+        }
+      },
+      "id": "scalar_native_timestamp",
+      "path": "tests/fixtures/okf_profile/scalar_native_timestamp.md",
+      "tags": [
+        "out_of_subset",
+        "scalar_typing"
+      ]
+    },
+    {
+      "description": "Unquoted YAML-1.1 boolean word: out-of-subset scalar (the Norway problem).",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_YAML_OUT_OF_SUBSET",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_YAML_OUT_OF_SUBSET",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": "OKF_YAML_UNSUPPORTED",
+            "result": "unverified"
+          }
+        }
+      },
+      "id": "scalar_unquoted_bool",
+      "path": "tests/fixtures/okf_profile/scalar_unquoted_bool.md",
+      "tags": [
+        "out_of_subset",
+        "scalar_typing"
+      ]
+    },
+    {
+      "description": "Semantic-equivalence pair member A; equal to B as a semantic mapping, differing only in key order.",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "pass"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "pass"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        }
+      },
+      "id": "sem_equiv_key_order_a",
+      "path": "tests/fixtures/okf_profile/sem_equiv_key_order_a.md",
+      "tags": [
+        "accepted",
+        "semantic_equivalence"
+      ]
+    },
+    {
+      "description": "Semantic-equivalence pair member B; equal to A as a semantic mapping, differing only in key order.",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "pass"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "pass"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        }
+      },
+      "id": "sem_equiv_key_order_b",
+      "path": "tests/fixtures/okf_profile/sem_equiv_key_order_b.md",
+      "tags": [
+        "accepted",
+        "semantic_equivalence"
+      ]
+    },
+    {
+      "description": "Profile-valid concept carrying an llloom namespace mapping; its downstream schema is not evaluated here.",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "pass"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "pass"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        }
+      },
+      "id": "tool_namespace",
+      "path": "tests/fixtures/okf_profile/tool_namespace.md",
+      "tags": [
+        "accepted",
+        "tool_namespace"
+      ]
+    },
+    {
+      "description": "Well-formed frontmatter with an empty type value: conclusive OKF fail for both parsers.",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "not_applicable"
+          },
+          "okf_concept": {
+            "reason": "OKF_TYPE_MISSING",
+            "result": "fail"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "not_applicable"
+          },
+          "okf_concept": {
+            "reason": "OKF_TYPE_MISSING",
+            "result": "fail"
+          }
+        }
+      },
+      "id": "type_empty",
+      "path": "tests/fixtures/okf_profile/type_empty.md",
+      "tags": [
+        "okf_fail",
+        "type"
+      ]
+    },
+    {
+      "description": "Well-formed frontmatter with no type key: conclusive OKF fail for both parsers.",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "not_applicable"
+          },
+          "okf_concept": {
+            "reason": "OKF_TYPE_MISSING",
+            "result": "fail"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": null,
+            "result": "not_applicable"
+          },
+          "okf_concept": {
+            "reason": "OKF_TYPE_MISSING",
+            "result": "fail"
+          }
+        }
+      },
+      "id": "type_missing",
+      "path": "tests/fixtures/okf_profile/type_missing.md",
+      "tags": [
+        "okf_fail",
+        "type"
+      ]
+    },
+    {
+      "description": "Registry-external type: OKF pass (unknown types tolerated), profile fail PROFILE_TYPE_UNSUPPORTED.",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_TYPE_UNSUPPORTED",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_TYPE_UNSUPPORTED",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        }
+      },
+      "id": "type_unknown",
+      "path": "tests/fixtures/okf_profile/type_unknown.md",
+      "tags": [
+        "profile_fail",
+        "type"
+      ]
+    },
+    {
+      "description": "A newer rc value the pinned 0.1-rc.1 profile treats as unsupported; paired with accepted_minimal as the mixed-version scenario.",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_VERSION_UNSUPPORTED",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_VERSION_UNSUPPORTED",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        }
+      },
+      "id": "version_mixed_newer_rc",
+      "path": "tests/fixtures/okf_profile/version_mixed_newer_rc.md",
+      "tags": [
+        "mixed_version",
+        "profile_fail",
+        "version"
+      ]
+    },
+    {
+      "description": "Unknown declared framework_profile version: OKF pass (best-effort), profile fail PROFILE_VERSION_UNSUPPORTED.",
+      "expected": {
+        "execution_eligibility": "not_evaluated",
+        "full_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_VERSION_UNSUPPORTED",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        },
+        "subset_parser": {
+          "framework_profile": {
+            "reason": "PROFILE_VERSION_UNSUPPORTED",
+            "result": "fail"
+          },
+          "okf_concept": {
+            "reason": null,
+            "result": "pass"
+          }
+        }
+      },
+      "id": "version_unknown",
+      "path": "tests/fixtures/okf_profile/version_unknown.md",
+      "tags": [
+        "profile_fail",
+        "version"
+      ]
+    }
+  ],
+  "groups": {
+    "mixed_version": {
+      "byte_identical_parse_claim": false,
+      "members": [
+        [
+          "accepted_minimal",
+          "version_mixed_newer_rc"
+        ]
+      ],
+      "note": "a repository holding a 0.1-rc.1 document and a newer-rc document that the pinned 0.1-rc.1 profile treats as unsupported"
+    },
+    "moved_path": {
+      "byte_identical_parse_claim": false,
+      "members": [
+        [
+          "moved_original",
+          "moved_relocated"
+        ]
+      ],
+      "note": "identical framework_id (fid-move-001); distinct path-derived concept IDs"
+    },
+    "semantic_equivalence": {
+      "byte_identical_parse_claim": false,
+      "comparison": "semantic_mapping_equality",
+      "members": [
+        [
+          "sem_equiv_key_order_a",
+          "sem_equiv_key_order_b"
+        ]
+      ],
+      "note": "same keys and values, different mapping-key order; equal as semantic mappings; no byte-identical parse asserted"
+    }
+  },
+  "layers": [
+    "okf_concept",
+    "framework_profile",
+    "execution_eligibility"
+  ],
+  "manifest_schema": "okf_profile_fixture_manifest",
+  "manifest_version": "1",
+  "profile_candidate": "0.1-rc.1",
+  "vocabulary": {
+    "execution_eligibility": [
+      "not_evaluated"
+    ],
+    "framework_profile_result": [
+      "fail",
+      "not_applicable",
+      "pass"
+    ],
+    "okf_concept_result": [
+      "fail",
+      "not_evaluated",
+      "pass",
+      "unverified"
+    ],
+    "okf_reason_codes": [
+      "OKF_FRONTMATTER_MISSING",
+      "OKF_PARSE_LIMIT_EXCEEDED",
+      "OKF_TYPE_MISSING",
+      "OKF_YAML_INVALID",
+      "OKF_YAML_UNSUPPORTED"
+    ],
+    "profile_reason_codes": [
+      "PROFILE_TYPE_UNSUPPORTED",
+      "PROFILE_VERSION_UNSUPPORTED",
+      "PROFILE_YAML_OUT_OF_SUBSET"
+    ]
+  }
+}

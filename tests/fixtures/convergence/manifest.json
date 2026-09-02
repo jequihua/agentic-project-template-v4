@@ -1,0 +1,30 @@
+{
+  "ladder": [
+    "healthy.md",
+    "no_guard.md",
+    "renamed_prompt.md",
+    "reset_honored.md",
+    "reset_rejected.md",
+    "round3_corrective.md",
+    "round4_authorized.md",
+    "round4_unauthorized.md",
+    "unrelated_invariants.md"
+  ],
+  "envelope": [
+    "findings.md",
+    "slice_prompt.md"
+  ],
+  "candidate": [
+    "acceptance_b.md",
+    "acceptance_nonpassing.md",
+    "acceptance_wrong_identity.md",
+    "candidate_a.md",
+    "candidate_b.md",
+    "review_a.md",
+    "review_b.md"
+  ],
+  "candidate_identities": {
+    "candidate_a.md": "6dbd995db1ff5a4eb790a141f7d6edf64398a13515e69bb6fba655cfa45bd5a1",
+    "candidate_b.md": "e62302162bec9513841cd3db4420fb16987aa1ba8f71caa159fe7a185f634ac0"
+  }
+}

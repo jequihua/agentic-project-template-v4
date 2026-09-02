@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "artifact-first-project-template"
+version = "0.1.0"
+description = "Scaffold checks for an artifact-first agentic project template"
+requires-python = ">=3.10"
+# PyYAML is the mandatory YAML syntax engine for the OKF/profile checker.
+# The checker uses only the pure-Python yaml.SafeLoader. Other scripts remain
+# standard-library only.
+dependencies = [
+    "PyYAML>=6.0.3,<7",
+]
+
+# This is a metadata/tooling-only repository, not an importable Python package.
+# Disable setuptools automatic (flat-layout) package discovery so editable
+# installs declare dependencies without turning scaffold directories (memory,
+# prompts, questions, milestones, initialization, ...) into packages. There is no
+# installed import surface and no console entry point.
+[tool.setuptools]
+packages = []

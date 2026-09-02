@@ -1,0 +1,45 @@
+# Starting .gitignore for a front-facing software/package repo.
+# Adapt as needed; do not ignore source files that should publish.
+
+# Python caches and build
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+
+# Test / coverage output
+.coverage
+coverage.xml
+htmlcov/
+
+# Virtual environments and dependencies
+.venv/
+venv/
+env/
+node_modules/
+
+# Env and secrets
+.env
+.env.*
+*.pem
+*.key
+credentials*
+secrets*
+
+# Logs / temp
+*.log
+tmp/
+temp/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
