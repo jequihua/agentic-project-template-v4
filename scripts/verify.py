@@ -1,7 +1,9 @@
 """Run a slice's authoritative verification and record a receipt."""
+
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -14,9 +16,7 @@ import ledger
 import roadmap
 
 
-ABSOLUTE_PATH = re.compile(
-    r"(?i)(?<![\w:/])(?:[a-z]:[\\/]|/)(?:[^\s<>\"']+[\\/])*[^\s<>\"']+"
-)
+ABSOLUTE_PATH = re.compile(r"(?i)(?<![\w:/])(?:[a-z]:[\\/]|/)(?:[^\s<>\"']+[\\/])*[^\s<>\"']+")
 
 
 def _tail(value: bytes) -> str:
@@ -89,22 +89,24 @@ def run(root: Path, sid: str, timeout: float = 1800):
         "t": c.now(),
         "base_commit": c.git(root, "rev-parse", "HEAD", text=True).stdout.strip(),
         "tree_dirty_before": bool(before),
-        "commands": [{
-            "label": "full",
-            "argv": _public_argv(argv, root),
-            "exit": exit_code,
-            "secs": seconds,
-            "stdout_tail": _scrub(stdout, root, env),
-            "stderr_tail": _scrub(stderr, root, env),
-            "timed_out": timed_out,
-        }],
+        "commands": [
+            {
+                "label": "full",
+                "argv": _public_argv(argv, root),
+                "exit": exit_code,
+                "secs": seconds,
+                "stdout_tail": _scrub(stdout, root, env),
+                "stderr_tail": _scrub(stderr, root, env),
+                "timed_out": timed_out,
+            }
+        ],
         "changed_files": current["changed"],
         "tree_clean_after": not bool(after),
         "ok": exit_code == 0 and not timed_out and before == after,
     }
     folder = root / "05_governance/reviews" / sid.split("-")[0].lower()
     path = folder / f"{sid}_r{current['round']}_verification.json"
-    c.atomic_json(path, receipt)
+    c.atomic_text(path, json.dumps(receipt, ensure_ascii=False, separators=(",", ":")) + "\n")
     rel = path.relative_to(root).as_posix()
     ledger.append(
         root / "05_governance/ledger.jsonl",

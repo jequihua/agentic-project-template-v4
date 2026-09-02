@@ -1,4 +1,5 @@
 """Validate, fold, and append manual-loop ledger events."""
+
 from __future__ import annotations
 
 import argparse
@@ -15,6 +16,7 @@ import roadmap
 SCHEMA = "frutlups.ledger/1"
 EVENTS = {
     "prompt",
+    "artifact",
     "coded",
     "verified",
     "reviewed",
@@ -28,6 +30,7 @@ EVENTS = {
 COMMON = {"schema", "t", "ev", "by"}
 FIELDS = {
     "prompt": {"slice", "round", "path", "sha", "baseline"},
+    "artifact": {"scope", "round", "role", "path", "sha"},
     "coded": {
         "slice",
         "round",
@@ -97,30 +100,51 @@ def _validate(event, line="event"):
     ev = event.get("ev")
     _need(event.get("schema") == SCHEMA and ev in EVENTS, f"{line}: invalid schema or event")
     _need(event.get("by") in ACTORS, f"{line}: invalid by")
-    _need(isinstance(event.get("t"), str) and TIME.fullmatch(event["t"]),
-          f"{line}: invalid UTC timestamp")
+    _need(
+        isinstance(event.get("t"), str) and TIME.fullmatch(event["t"]),
+        f"{line}: invalid UTC timestamp",
+    )
     unknown = set(event) - COMMON - FIELDS[ev]
     missing = FIELDS[ev] - OPTIONAL.get(ev, set()) - set(event)
-    _need(not unknown and not missing,
-          f"{line}: unknown={sorted(unknown)} missing={sorted(missing)}")
+    _need(
+        not unknown and not missing, f"{line}: unknown={sorted(unknown)} missing={sorted(missing)}"
+    )
     if "round" in event:
-        _need(type(event["round"]) is int and event["round"] >= 1,
-              f"{line}: invalid round")
+        valid_round = type(event["round"]) is int and event["round"] >= 1
+        if ev == "artifact" and event.get("role") in ("holistic_prompt", "holistic_report"):
+            valid_round = event["round"] == "holistic"
+        _need(valid_round, f"{line}: invalid round")
     if "slice" in event:
-        _need(bool(re.fullmatch(r"M\d{3}-S\d{2}", str(event["slice"]))),
-              f"{line}: invalid slice")
+        _need(bool(re.fullmatch(r"M\d{3}-S\d{2}", str(event["slice"]))), f"{line}: invalid slice")
     if "milestone" in event:
-        _need(bool(re.fullmatch(r"M\d{3}", str(event["milestone"]))),
-              f"{line}: invalid milestone")
+        _need(bool(re.fullmatch(r"M\d{3}", str(event["milestone"]))), f"{line}: invalid milestone")
+    if ev == "artifact":
+        scope = str(event.get("scope", ""))
+        role = event.get("role")
+        slice_artifact = bool(re.fullmatch(r"M\d{3}-S\d{2}", scope))
+        milestone_artifact = bool(re.fullmatch(r"M\d{3}", scope))
+        valid = (
+            slice_artifact
+            and role == "review_prompt"
+            and type(event["round"]) is int
+            or milestone_artifact
+            and role in ("holistic_prompt", "holistic_report")
+            and event["round"] == "holistic"
+        )
+        valid_actor = event["by"] in ("architect", "frutlups") or (
+            role == "holistic_report" and event["by"] == "human"
+        )
+        _need(valid and valid_actor, f"{line}: invalid artifact scope, round, role, or actor")
     for key in ("path", "receipt", "report", "notes_path", "holistic_report"):
         if key in event:
             c.safe_rel(event[key])
     if "sha" in event:
-        _need(isinstance(event["sha"], str) and SHA.fullmatch(event["sha"]),
-              f"{line}: invalid sha")
+        _need(isinstance(event["sha"], str) and SHA.fullmatch(event["sha"]), f"{line}: invalid sha")
     if "commit" in event:
-        _need(isinstance(event["commit"], str) and COMMIT.fullmatch(event["commit"]),
-              f"{line}: invalid commit")
+        _need(
+            isinstance(event["commit"], str) and COMMIT.fullmatch(event["commit"]),
+            f"{line}: invalid commit",
+        )
     if ev == "coded":
         _validate_changes(event["changed"], line, "changed")
     if ev == "prompt" and "baseline" in event:
@@ -147,8 +171,7 @@ def _validate(event, line="event"):
         for key in numeric_fields
     )
     valid = valid and all(
-        key not in event or type(event[key]) is int and event[key] >= 0
-        for key in count_fields
+        key not in event or type(event[key]) is int and event[key] >= 0 for key in count_fields
     )
     valid = valid and (ev != "stop" or event["by"] == "frutlups")
     valid = valid and (ev != "unblocked" or event["by"] in ("human", "architect"))
@@ -195,14 +218,33 @@ def fold(events, rm):
         ev = event["ev"]
         if ev in ("note", "stop"):
             continue
+        if ev == "artifact":
+            scope = event["scope"]
+            if event["role"] == "review_prompt":
+                _need(scope in states, f"unknown slice in ledger: {scope}")
+                state = states[scope]
+                ready = state["step"] == "reviewing" and event["round"] == state["round"]
+                _need(ready, f"{scope}: review prompt artifact out of order")
+            else:
+                _need(scope in milestones, f"unknown milestone in ledger: {scope}")
+                milestone = milestones[scope]
+                ready = all(
+                    states[item["id"]]["step"] == "accepted" for item in milestone["slices"]
+                )
+                _need(
+                    milestone["holistic_review"] and scope not in done and ready,
+                    f"{scope}: holistic prompt artifact out of order",
+                )
+            continue
         if ev == "milestone_done":
             mid = event["milestone"]
             _need(mid in milestones, f"unknown milestone in ledger: {mid}")
             milestone = milestones[mid]
-            ready = all(states[item["id"]]["step"] == "accepted"
-                        for item in milestone["slices"])
-            _need(milestone["holistic_review"] and mid not in done and ready,
-                  f"{mid}: invalid or premature milestone_done")
+            ready = all(states[item["id"]]["step"] == "accepted" for item in milestone["slices"])
+            _need(
+                milestone["holistic_review"] and mid not in done and ready,
+                f"{mid}: invalid or premature milestone_done",
+            )
             done.add(mid)
             continue
         sid = event.get("slice")
@@ -215,19 +257,24 @@ def fold(events, rm):
             state.update(step="coding", prompt=event["path"], baseline=event.get("baseline", []))
             state["corrective_rounds_used"] += round_no > 1
         elif ev == "coded":
-            _need(state["step"] == "coding" and round_no == state["round"],
-                  f"{sid}: coded out of order")
-            state.update(step="verifying", changed=event["changed"],
-                         notes=event.get("notes_path"))
+            _need(
+                state["step"] == "coding" and round_no == state["round"],
+                f"{sid}: coded out of order",
+            )
+            state.update(step="verifying", changed=event["changed"], notes=event.get("notes_path"))
         elif ev == "verified":
-            _need(state["step"] == "verifying" and round_no == state["round"],
-                  f"{sid}: verified out of order")
+            _need(
+                state["step"] == "verifying" and round_no == state["round"],
+                f"{sid}: verified out of order",
+            )
             next_step = "reviewing" if event["ok"] else "fix"
             next_round = round_no if event["ok"] else round_no + 1
             state.update(step=next_step, receipt=event["receipt"], round=next_round)
         elif ev == "reviewed":
-            _need(state["step"] == "reviewing" and round_no == state["round"],
-                  f"{sid}: reviewed out of order")
+            _need(
+                state["step"] == "reviewing" and round_no == state["round"],
+                f"{sid}: reviewed out of order",
+            )
             step = {
                 "pass": "accept_pending",
                 "override": "accept_pending",
@@ -242,8 +289,10 @@ def fold(events, rm):
                 unblock_reason=None,
             )
         elif ev == "accepted":
-            _need(state["step"] == "accept_pending" and round_no == state["round"],
-                  f"{sid}: accepted out of order")
+            _need(
+                state["step"] == "accept_pending" and round_no == state["round"],
+                f"{sid}: accepted out of order",
+            )
             state.update(step="accepted", open=[], reopened=False, unblock_reason=None)
         elif ev == "reopened":
             valid = state["step"] == "accepted" and round_no == state["round"] + 1
@@ -279,8 +328,11 @@ def next_slice(rm, state):
     for milestone in rm["milestones"]:
         if milestone["status"] == "active":
             return next(
-                (item["id"] for item in milestone["slices"]
-                 if state["slices"][item["id"]]["step"] != "accepted"),
+                (
+                    item["id"]
+                    for item in milestone["slices"]
+                    if state["slices"][item["id"]]["step"] != "accepted"
+                ),
                 None,
             )
     return None
@@ -305,17 +357,16 @@ _rel_file = evidence.rel_file
 def _artifacts_for(root, events, sid):
     paths = {"05_governance/ledger.jsonl", "05_governance/backlog.md"}
     for event in events:
-        if event.get("slice") != sid:
+        belongs = event.get("slice") == sid or event.get("scope") == sid
+        if event.get("scope") == sid.split("-")[0] and event["ev"] == "artifact":
+            belongs = True
+        if not belongs:
             continue
-        paths.update(event[key] for key in ("path", "notes_path", "receipt", "report")
-                     if event.get(key))
+        paths.update(
+            event[key] for key in ("path", "notes_path", "receipt", "report") if event.get(key)
+        )
         if event["ev"] == "coded":
             paths.update(item["path"] for item in event["changed"])
-    for folder in ("for_coding_agent", "for_review_agent"):
-        paths.update(
-            path.relative_to(root).as_posix()
-            for path in (root / "prompts" / folder).glob(f"*_{sid}_*.md")
-        )
     return sorted(paths)
 
 
@@ -350,10 +401,20 @@ def check(root, rm, events):
                 latest[item["path"]] = item
     for rel, item in latest.items():
         path = c.repo_path(root, rel)
+        matches_latest = (
+            item["kind"] == "deleted"
+            and not path.exists()
+            and not path.is_symlink()
+            or item["kind"] != "deleted"
+            and path.is_file()
+            and not path.is_symlink()
+            and c.sha(path) == item["sha"]
+        )
+        if matches_latest or evidence.matches_head(root, rel):
+            continue
         if item["kind"] == "deleted":
-            if path.exists():
-                errors.append(f"drift: {rel} was deleted")
-        elif path.is_symlink() or not path.is_file() or c.sha(path) != item["sha"]:
+            errors.append(f"drift: {rel} was deleted")
+        else:
             errors.append(f"drift: {rel}")
     return errors
 
@@ -403,12 +464,14 @@ def _holistic_events(review, milestone, state, by, report):
         if not any(finding["id"].startswith(sid + "-") for sid in slice_ids):
             raise ValueError("every holistic P0-P2 finding id must start with its slice id")
     if review["verdict"] in ("pass", "override"):
-        return [{
-            "ev": "milestone_done",
-            "by": by,
-            "milestone": milestone["id"],
-            "holistic_report": report,
-        }]
+        return [
+            {
+                "ev": "milestone_done",
+                "by": by,
+                "milestone": milestone["id"],
+                "holistic_report": report,
+            }
+        ]
     groups = {}
     for finding in review["open"]:
         sid = next((value for value in slice_ids if finding.startswith(value + "-")), None)
@@ -434,11 +497,13 @@ def _record(root, value, args, rm, events, state):
     review = parse_review(path.read_text(encoding="utf-8"))
     ledger_path = root / "05_governance/ledger.jsonl"
     if args.milestone:
-        milestone = next((item for item in rm["milestones"]
-                          if item["id"] == args.milestone), None)
-        ready = milestone and milestone["holistic_review"] and all(
-            state["slices"][item["id"]]["step"] == "accepted"
-            for item in milestone["slices"]
+        milestone = next((item for item in rm["milestones"] if item["id"] == args.milestone), None)
+        ready = (
+            milestone
+            and milestone["holistic_review"]
+            and all(
+                state["slices"][item["id"]]["step"] == "accepted" for item in milestone["slices"]
+            )
         )
         valid = (
             review["identity"] == args.milestone
@@ -448,7 +513,18 @@ def _record(root, value, args, rm, events, state):
         )
         if not valid:
             raise ValueError("holistic report identity, authority, or readiness mismatch")
-        candidates = _holistic_events(review, milestone, state, args.by, rel)
+        candidates = [
+            {
+                "ev": "artifact",
+                "by": args.by,
+                "scope": args.milestone,
+                "round": "holistic",
+                "role": "holistic_report",
+                "path": rel,
+                "sha": c.sha(path),
+            },
+            *_holistic_events(review, milestone, state, args.by, rel),
+        ]
         trial = list(events)
         for candidate in candidates:
             complete = {"schema": SCHEMA, "t": c.now(), **candidate}
@@ -464,8 +540,7 @@ def _record(root, value, args, rm, events, state):
     current = state["slices"].get(sid)
     if not current or current["step"] != "reviewing" or round_no != current["round"]:
         raise ValueError("review identity/round is not awaiting review")
-    waived = any(item["disposition"] == "waived_by_human"
-                 for item in review["findings"])
+    waived = any(item["disposition"] == "waived_by_human" for item in review["findings"])
     if (review["verdict"] == "override" or waived) and args.by != "human":
         raise ValueError("override or waiver requires --by human")
     carried = [
@@ -516,10 +591,10 @@ def _coded(root, args, rm, events, state, ledger_path):
     }
     if notes:
         owned.add(notes)
-    baseline = {(entry["path"], entry["sha"], entry["kind"])
-                for entry in current["baseline"]}
+    baseline = {(entry["path"], entry["sha"], entry["kind"]) for entry in current["baseline"]}
     changed = [
-        entry for entry in changed_files(root)
+        entry
+        for entry in changed_files(root)
         if entry["path"] not in owned
         and (entry["path"], entry["sha"], entry["kind"]) not in baseline
     ]
@@ -553,8 +628,10 @@ def main(argv=None):
             if current["step"] not in ("unstarted", "fix"):
                 raise ValueError(f"{args.slice} is {current['step']}, not ready for a prompt")
             require_artifacts(root, events)
-            baseline = prompt_baseline(root, args.allow_dirty)
             rel, path = _rel_file(root, args.path)
+            baseline = prompt_baseline(
+                root, rm, events, args.slice, args.allow_dirty, prospective=(rel,)
+            )
             event = {
                 "ev": "prompt",
                 "by": args.by,
@@ -563,7 +640,7 @@ def main(argv=None):
                 "path": rel,
                 "sha": c.sha(path),
             }
-            if baseline is not None:
+            if baseline:
                 event["baseline"] = baseline
             append(ledger_path, event, rm)
             print(f"{args.slice} r{current['round']} prompt -> {rel}")
@@ -615,7 +692,8 @@ def main(argv=None):
             rows += [
                 f"| {event['slice']} | {event['round']} | {event['verdict']} | "
                 f"`{event['report']}` |"
-                for event in events if event["ev"] == "reviewed"
+                for event in events
+                if event["ev"] == "reviewed"
             ]
             text = "# Review index\n\n" + "\n".join(rows) + "\n"
             if args.output:

@@ -13,10 +13,26 @@ import roadmap
 
 
 KNOWN = {
-    "slice_id", "title", "round", "objective", "acceptance", "non_goals",
-    "read_first", "allowed_prefixes", "forbidden", "focused", "full",
-    "open_findings", "memory", "diff_manifest", "diff_evidence", "coder_notes",
-    "receipt", "prior_findings", "report_path", "finding_id_rule",
+    "slice_id",
+    "title",
+    "round",
+    "objective",
+    "acceptance",
+    "non_goals",
+    "read_first",
+    "allowed_prefixes",
+    "forbidden",
+    "focused",
+    "full",
+    "open_findings",
+    "memory",
+    "diff_manifest",
+    "diff_evidence",
+    "coder_notes",
+    "receipt",
+    "prior_findings",
+    "report_path",
+    "finding_id_rule",
 }
 
 
@@ -88,7 +104,7 @@ def coding(root, sid, allow_dirty=False):
     if not current or current["step"] not in ("unstarted", "fix"):
         raise ValueError(f"{sid} is not ready for coding prompt")
     ledger.require_artifacts(root, events)
-    baseline = evidence.prompt_baseline(root, allow_dirty)
+    baseline = evidence.prompt_baseline(root, rm, events, sid, allow_dirty)
     _, item = roadmap.slice_by_id(rm, sid)
     focused = item.get("focused") or rm["verification"].get("focused_default", [])
     values = {
@@ -99,9 +115,7 @@ def coding(root, sid, allow_dirty=False):
         "acceptance": _bullets(item["acceptance"]),
         "non_goals": _bullets(item.get("non_goals", [])),
         "read_first": _bullets([f"`{path}`" for path in item.get("read_first", [])]),
-        "allowed_prefixes": ", ".join(
-            f"`{path}`" for path in roadmap.effective_prefixes(rm, item)
-        ),
+        "allowed_prefixes": ", ".join(f"`{path}`" for path in roadmap.effective_prefixes(rm, item)),
         "forbidden": ", ".join(f"`{path}`" for path in rm["forbidden"]),
         "focused": _argv(focused),
         "full": _argv(item.get("verification", rm["verification"]["full"])),
@@ -117,10 +131,14 @@ def coding(root, sid, allow_dirty=False):
     c.atomic_text(path, text)
     rel = path.relative_to(root).as_posix()
     event = {
-        "ev": "prompt", "by": "architect", "slice": sid, "round": current["round"],
-        "path": rel, "sha": c.sha(path),
+        "ev": "prompt",
+        "by": "architect",
+        "slice": sid,
+        "round": current["round"],
+        "path": rel,
+        "sha": c.sha(path),
     }
-    if baseline is not None:
+    if baseline:
         event["baseline"] = baseline
     ledger.append(root / "05_governance/ledger.jsonl", event, rm)
     if len(text.encode()) > 8192:
@@ -135,20 +153,32 @@ def review(root, sid):
     current = state["slices"].get(sid)
     if not current or current["step"] != "reviewing":
         raise ValueError(f"{sid} is not awaiting review")
+    ledger.require_artifacts(root, events)
     _, item = roadmap.slice_by_id(rm, sid)
     folder = f"05_governance/reviews/{sid.split('-')[0].lower()}"
     report = f"{folder}/{sid}_r{current['round']}_review.md"
     receipt_text = (root / current["receipt"]).read_text(encoding="utf-8")
-    notes = evidence.bounded_text(
-        (root / current["notes"]).read_text(encoding="utf-8"), current["notes"]
-    ) if current["notes"] else ""
-    changed = _bullets([
-        f"`{item['path']}` ({item['kind']}, sha256 `{item['sha']}`)"
-        for item in current["changed"]
-    ])
+    notes = (
+        evidence.bounded_text(
+            (root / current["notes"]).read_text(encoding="utf-8"), current["notes"]
+        )
+        if current["notes"]
+        else ""
+    )
+    current_paths = {item["path"] for item in current["changed"]}
+    changed = _bullets(
+        [
+            f"`{item['path']}` ({item['kind']}, sha256 `{item['sha']}`, "
+            f"{'current round' if item['path'] in current_paths else 'earlier round'})"
+            for item in evidence.slice_changes(events, sid)
+        ]
+    )
     values = {
-        "slice_id": sid, "title": item["title"], "round": current["round"],
-        "objective": item["objective"].strip(), "acceptance": _bullets(item["acceptance"]),
+        "slice_id": sid,
+        "title": item["title"],
+        "round": current["round"],
+        "objective": item["objective"].strip(),
+        "acceptance": _bullets(item["acceptance"]),
         "diff_manifest": changed,
         "diff_evidence": evidence.review_diff(root, current["changed"]),
         "coder_notes": notes,
@@ -161,14 +191,29 @@ def review(root, sid):
         "finding_id_rule": f"Start every finding ID with `{sid}-`.",
     }
     text = _render(
-        root / "prompts/templates/review_prompt.md", values,
+        root / "prompts/templates/review_prompt.md",
+        values,
         (("Coder notes", "coder_notes"), ("Prior findings", "prior_findings")),
     )
     path = root / "prompts/for_review_agent" / f"{_next(root):03d}_{sid}_r{current['round']}.md"
     c.atomic_text(path, text)
+    rel = path.relative_to(root).as_posix()
+    ledger.append(
+        root / "05_governance/ledger.jsonl",
+        {
+            "ev": "artifact",
+            "by": "architect",
+            "scope": sid,
+            "round": current["round"],
+            "role": "review_prompt",
+            "path": rel,
+            "sha": c.sha(path),
+        },
+        rm,
+    )
     if len(text.encode()) > 64 * 1024:
         print("warning: review prompt exceeds 64 KB", file=sys.stderr)
-    return path.relative_to(root).as_posix()
+    return rel
 
 
 def holistic(root, mid):
@@ -176,17 +221,25 @@ def holistic(root, mid):
     events = ledger.read(root / "05_governance/ledger.jsonl")
     state = ledger.fold(events, rm)
     milestone = next((item for item in rm["milestones"] if item["id"] == mid), None)
-    ready = milestone and milestone["holistic_review"] and all(
-        state["slices"][item["id"]]["step"] == "accepted" for item in milestone["slices"]
+    ready = (
+        milestone
+        and milestone["holistic_review"]
+        and all(state["slices"][item["id"]]["step"] == "accepted" for item in milestone["slices"])
     )
     if not ready:
         raise ValueError(f"{mid} is not ready for holistic review")
+    ledger.require_artifacts(root, events)
     changed = []
+    paths_by_slice = {}
     receipts = []
     for item in milestone["slices"]:
         current = state["slices"][item["id"]]
-        changed += [f"`{row['path']}` ({item['id']}, {row['kind']})"
-                    for row in current["changed"]]
+        cumulative = evidence.slice_changes(events, item["id"])
+        paths_by_slice[item["id"]] = [row["path"] for row in cumulative]
+        changed += [
+            f"`{row['path']}` ({item['id']}, {row['kind']}, latest round {row['round']})"
+            for row in cumulative
+        ]
         if current["receipt"]:
             receipt_text = (root / current["receipt"]).read_text(encoding="utf-8").rstrip()
             receipts.append(
@@ -195,22 +248,24 @@ def holistic(root, mid):
                 f"Review: `{current['report']}`\n\n```json\n{receipt_text}\n```"
             )
     base = evidence.accepted_base(root, events, milestone)
-    stat = c.git(root, "diff", f"{base}..HEAD", "--stat", check=False, text=True)
-    if stat.returncode:
-        raise ValueError("cannot render holistic accepted-range diff stat")
     report = f"05_governance/reviews/{mid.lower()}/{mid}_holistic_review.md"
     values = {
-        "slice_id": mid, "title": milestone["title"], "round": "holistic",
+        "slice_id": mid,
+        "title": milestone["title"],
+        "round": "holistic",
         "objective": f"Judge holistic closure of {mid} across its accepted slices.",
-        "acceptance": _bullets([
-            f"{item['id']}: {value}" for item in milestone["slices"]
-            for value in item["acceptance"]
-        ]),
-        "diff_manifest": _bullets(changed),
-        "diff_evidence": evidence.diff_block(
-            f"git diff {base}..HEAD --stat\n{stat.stdout}", changed
+        "acceptance": _bullets(
+            [
+                f"{item['id']}: {value}"
+                for item in milestone["slices"]
+                for value in item["acceptance"]
+            ]
         ),
-        "coder_notes": "", "receipt": "\n\n".join(receipts), "prior_findings": "",
+        "diff_manifest": _bullets(changed),
+        "diff_evidence": evidence.holistic_diff(root, base, paths_by_slice),
+        "coder_notes": "",
+        "receipt": "\n\n".join(receipts),
+        "prior_findings": "",
         "report_path": report,
         "finding_id_rule": (
             "Every P0-P2 finding ID must start with the affected slice ID, "
@@ -218,12 +273,27 @@ def holistic(root, mid):
         ),
     }
     text = _render(
-        root / "prompts/templates/review_prompt.md", values,
+        root / "prompts/templates/review_prompt.md",
+        values,
         (("Coder notes", "coder_notes"), ("Prior findings", "prior_findings")),
     )
     path = root / "prompts/for_review_agent" / f"{_next(root):03d}_{mid}_holistic.md"
     c.atomic_text(path, text)
-    return path.relative_to(root).as_posix()
+    rel = path.relative_to(root).as_posix()
+    ledger.append(
+        root / "05_governance/ledger.jsonl",
+        {
+            "ev": "artifact",
+            "by": "architect",
+            "scope": mid,
+            "round": "holistic",
+            "role": "holistic_prompt",
+            "path": rel,
+            "sha": c.sha(path),
+        },
+        rm,
+    )
+    return rel
 
 
 def main(argv=None):

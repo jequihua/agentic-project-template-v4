@@ -35,8 +35,10 @@ handoffs but receives no broader authority.
    leaves the tree for a human; nothing is reverted automatically.
 4. `verify.py` runs the declared full argv and writes a receipt. It appends
    `verified` whether the check passes or fails.
-5. On success, a review prompt carries the receipt, changed-file manifest,
-   bounded code diff, and optional notes to a read-only reviewer.
+5. On success, a review prompt carries the receipt, cumulative changed-path
+   manifest, current-round bounded diff, and optional notes to a read-only
+   reviewer. A neutral `artifact` event records its immutable identity without
+   changing lifecycle state.
 6. `ledger.py record` validates the report and appends `reviewed`.
 7. A pass becomes `accept_pending`. The architect accepts it, optionally making
    the exact acceptance commit. Needs-work or failed verification produces a
@@ -89,7 +91,9 @@ Human records may additionally use `override`; autonomous reviewers may not.
 
 Rounds start at 1. Failed verification, a needs-work review, or an authorized
 unblock advances the next coding prompt to the following round and carries the
-relevant command tails, open findings, and unblock reason. Transport failure
+relevant command tails, open findings, and unblock reason. The prompt
+automatically baselines exact ledger-known same-slice state; `--allow-dirty` is
+reserved for inspected unknown architect state. Transport failure
 may retry the same agent job without a new prompt event and does not consume a
 corrective round. Review later rounds only against open findings, the delta,
 and evidence invalidated by that delta.
@@ -105,7 +109,8 @@ A milestone's slices are accepted only through the ledger. If
 `milestone_done` event. If true, a holistic review must pass before that event
 is recorded. A holistic P0-P2 finding id starts with the affected slice id. All
 open findings for one slice produce one reopen reason containing every id; then
-continue that slice's round sequence. Empty work or an empty next frontier is
+continue that slice's round sequence. Holistic prompt/report artifact events
+preserve provenance across that reopen. Empty work or an empty next frontier is
 not completion.
 
 ## Commits

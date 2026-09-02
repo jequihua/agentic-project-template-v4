@@ -1,30 +1,51 @@
 """Small shared primitives for the v4 manual-loop scripts."""
+
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import re
 import subprocess
 import tempfile
 from datetime import datetime, timezone
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
+HASH_CHUNK = 64 * 1024
 
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
+def evidence_sha_bytes(data: bytes) -> str:
+    """Hash normalized evidence bytes."""
+    if b"\x00" not in data:
+        data = data.replace(b"\r\n", b"\n")
+    return hashlib.sha256(data).hexdigest()
+
+
 def sha(path: Path) -> str:
-    digest = hashlib.sha256()
+    """Stream a normalized evidence hash."""
     with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(65536), b""):
-            digest.update(chunk)
+        binary = any(b"\x00" in chunk for chunk in iter(lambda: stream.read(HASH_CHUNK), b""))
+    digest = hashlib.sha256()
+    pending = b""
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(HASH_CHUNK), b""):
+            if binary:
+                digest.update(chunk)
+                continue
+            data = pending + chunk
+            if data.endswith(b"\r"):
+                data, pending = data[:-1], b"\r"
+            else:
+                pending = b""
+            digest.update(data.replace(b"\r\n", b"\n"))
+    digest.update(pending)
     return digest.hexdigest()
 
 
@@ -32,23 +53,26 @@ def safe_rel(value: object, *, directory: bool = False) -> str:
     if not isinstance(value, str) or not value or "\\" in value or "\x00" in value:
         raise ValueError(f"unsafe repository-relative path: {value!r}")
     raw = value[:-1] if directory and value.endswith("/") else value
-    path = PurePosixPath(raw)
+    parts = raw.split("/")
     unsafe = (
         not raw
-        or path.is_absolute()
-        or ":" in path.parts[0]
-        or any(part in ("", ".", "..") for part in path.parts)
+        or raw.startswith("/")
+        or ":" in parts[0]
+        or any(part in ("", ".", "..") for part in parts)
     )
     if unsafe:
         raise ValueError(f"unsafe repository-relative path: {value!r}")
-    return path.as_posix() + ("/" if directory else "")
+    return raw + ("/" if directory else "")
 
 
 def cli_rel(value: object, *, directory: bool = False) -> str:
-    """Normalize a CLI path while keeping stored path contracts POSIX-only."""
+    """Normalize a CLI path before strict storage validation."""
     if not isinstance(value, str) or re.match(r"^[A-Za-z]:[\\/]", value):
         raise ValueError(f"unsafe repository-relative path: {value!r}")
-    return safe_rel(value.replace("\\", "/"), directory=directory)
+    normalized = value.replace("\\", "/")
+    if normalized.startswith("./"):
+        normalized = normalized[2:]
+    return safe_rel(normalized, directory=directory)
 
 
 def repo_path(root: Path, rel: str) -> Path:
@@ -84,10 +108,6 @@ def atomic_text(path: Path, text: str) -> None:
     finally:
         if os.path.exists(name):
             os.unlink(name)
-
-
-def atomic_json(path: Path, value: object) -> None:
-    atomic_text(path, json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n")
 
 
 def git(root: Path, *args: str, check: bool = True, text: bool = False):

@@ -2,17 +2,17 @@
 
 ## Ledger
 
-`05_governance/ledger.jsonl` is UTF-8, LF, and append-only. Each non-empty line
-is one compact JSON object with `schema: "frutlups.ledger/1"`, UTC ISO-8601 `t`,
-`ev`, and `by` (`human`, `architect`, or `frutlups`). A malformed line invalidates
-the ledger and reports its line number. Unknown event fields are refused.
+`05_governance/ledger.jsonl` is append-only UTF-8/LF. Each line has schema
+`frutlups.ledger/1`, UTC `t`, `ev`, and `by` (`human`, `architect`, or
+`frutlups`). Malformed lines and unknown fields are refused.
 
 | Event | Required event data |
 | --- | --- |
 | `prompt` | `slice`, `round`, prompt `path`, `sha`; optional dirty `baseline` changed objects |
-| `coded` | `slice`, `round`, `changed` objects (`path`, `sha`, `kind`), optional `notes_path`, seat/time/usage |
+| `artifact` | slice/milestone `scope`, positive round or `holistic`, `role`, `path`, `sha` |
+| `coded` | `slice`, `round`, `changed` (`path`, `sha`, `kind`), optional notes/usage |
 | `verified` | `slice`, `round`, receipt `receipt`, `sha`, `ok` |
-| `reviewed` | `slice`, `round`, `report`, `sha`, `verdict`, open P0-P2 ids, optional seat/time/usage |
+| `reviewed` | `slice`, `round`, `report`, `sha`, `verdict`, open ids, optional usage |
 | `accepted` | `slice`, `round`, optional already-known `commit` |
 | `reopened` | `slice`, new `round`, non-empty `reason` |
 | `unblocked` | blocked `slice`, next `round`, non-empty `reason`; human or architect only |
@@ -20,23 +20,31 @@ the ledger and reports its line number. Unknown event fields are refused.
 | `note` | non-empty `text`, optional `slice` |
 | `stop` | `reason`, `detail`; frutlups only |
 
-Changed kinds are `added`, `modified`, `deleted`, and `renamed`. Present files
-use the SHA-256 of current bytes. A deletion hashes the pre-change Git blob. A
-rename records the destination path and bytes. Git porcelain is parsed with NUL
-delimiters; filenames are not workflow state.
+Changed kinds are `added`, `modified`, `deleted`, and `renamed`. Evidence SHA-256
+uses bytes with every CRLF pair normalized to LF when no NUL byte is present;
+NUL-containing data hashes byte-for-byte and lone CR bytes are unchanged. The
+same rule applies to files and Git blobs. It does not rewrite files. Front-repo
+projection hashes remain raw because they detect exact publication divergence.
+A deletion hashes the pre-change Git blob; a rename records its destination.
 
-Prompt, receipt, and report paths are immutable evidence and are always
-re-hashed by `ledger.py check`; optional notes paths must remain present (their
-event has no hash field). Product paths are mutable: check the most recent
-`coded` reference for each path, and require deleted paths to remain absent.
-This detects current drift without invalidating history when a later slice
-legitimately changes the same file.
+Prompt, receipt, report, and `artifact` paths are immutable and re-hashed by
+`ledger.py check`; optional notes must remain present. Product paths are mutable:
+their latest `coded` identity must match unless the path has returned exactly to
+its current HEAD blob or to absence when HEAD lacks it.
 
-An optional prompt `baseline` has the same path/SHA/kind objects as `changed`.
-It records dirty state explicitly accepted by the architect at prompt time.
-`coded` excludes an entry only while all three values remain identical; a later
-change is coder work. Stored paths remain repository-relative POSIX paths even
-when a manual CLI accepts Windows backslashes and normalizes them at its edge.
+`artifact` is non-transitioning. A `review_prompt` belongs to a reviewing slice
+at that round. `holistic_prompt` and `holistic_report` belong to a milestone that
+is ready for holistic review; their round is `holistic`. Architects/frutlups
+record prompts, and a human may record a holistic report. Folding validates
+scope and timing without changing lifecycle state.
+
+A prompt `baseline` uses the same path/SHA/kind objects as `changed`. Corrective
+prompts automatically record exact same-slice artifacts and matching product
+history plus the harness ledger/backlog. Unknown paths still refuse unless the
+architect inspects and admits them with `--allow-dirty`. `coded` excludes an
+entry only while all three values remain identical. CLI paths may normalize
+backslashes and one leading `./`; stored paths stay strict repository-relative
+POSIX paths.
 
 ## Fold
 
@@ -46,6 +54,7 @@ Events are applied in file order for each roadmap slice:
 | --- | --- |
 | none | `unstarted`, round 1 |
 | `prompt(r)` | `coding` |
+| `artifact` | no state change; validate review readiness |
 | `coded(r)` | `verifying` |
 | `verified(r, ok=false)` | `fix`; next prompt is r+1 |
 | `verified(r, ok=true)` | `reviewing` |
@@ -56,58 +65,53 @@ Events are applied in file order for each roadmap slice:
 | `accepted(r)` | `accepted` |
 | `reopened(new r)` | `fix` at new r |
 
-Skipped or decreasing rounds, events in the wrong state, acceptance without a
-pass/authorized override, reopening without acceptance, and unknown roadmap ids
-are errors. The project next slice is the first reopened slice, otherwise the
-first non-accepted slice in the first active milestone. A milestone is done when
-all slices are accepted and, when holistic review is configured, a
-`milestone_done` event exists.
+Wrong/decreasing rounds, illegal transitions, and unknown ids are errors. Next
+is the first open reopened slice, then the first non-accepted slice in the first
+active milestone. A holistic milestone also requires `milestone_done`.
 
-Corrective rounds count prompt events above round 1 after failed verification,
-needs-work, or an explicit unblock. A same-round transport retry has no new
-prompt event. Every candidate is schema-validated and folded with the complete
-existing stream before its line is appended; refusal leaves ledger bytes
-unchanged.
+Corrective rounds count prompt events above round 1; transport retries do not.
+Every candidate is validated and folded before append, so refusal changes no
+ledger bytes.
 
 ## Verification receipt
 
-Receipts are deterministic JSON objects:
+Receipts are deterministic JSON objects shaped like:
 
 ```json
-{"schema":"frutlups.receipt/1","slice":"M001-S01","round":1,"t":"...","base_commit":"abc123","tree_dirty_before":true,"commands":[{"label":"full","argv":["python","-m","pytest"],"exit":0,"secs":1.2,"stdout_tail":"","stderr_tail":"","timed_out":false}],"changed_files":[{"path":"07_app/x.py","sha":"...","kind":"modified"}],"tree_clean_after":false,"ok":true}
+{"schema":"frutlups.receipt/1","slice":"M001-S01","round":1,"base_commit":"...","commands":[{"argv":["python","-m","pytest"],"exit":0}],"changed_files":[],"ok":true}
 ```
 
-The authoritative command is the slice `verification` override or
-`verification.full`. It is an argv list and runs with no shell from repository
-root. `ok` requires exit 0, no timeout, and an identical Git-status snapshot
-before and after command execution. The literal dirty/clean booleans describe
-the whole worktree; an already-dirty but unchanged tree can produce `ok: true`.
-Receipt writing and ledger append happen after the second snapshot.
-
-Output tails are at most 4 KB each. Paths are repository-relative; outside paths
-become `<outside-repo>`. Environment values and secrets are never serialized.
+The slice override or `verification.full` argv runs without a shell from root.
+`ok` requires exit 0, no timeout, and identical before/after Git status; a tree
+may stay dirty and still pass. Tails are at most 4 KB, outside paths become
+`<outside-repo>`, and secrets/environment values are not serialized. Writing and
+append occur after the final snapshot.
+Holistic range evidence takes `base_commit` from the first accepted slice's
+successful receipt, so that receipt and its normalized identity must remain
+portable and immutable.
 
 ## Review grammar
 
-A review has exactly one findings table, closure decision, and verdict section.
-The four table columns are `id`, `severity`, `disposition`, and `summary`.
-Finding ids are unique. Exactly one `Objective status:` and one non-empty
-`Objective evidence:` line follow the closure heading. The first non-empty line
-under the final verdict heading is:
+A review has one findings table (`id`, `severity`, `disposition`, `summary`),
+closure decision, and verdict section. Ids are unique; closure has one objective
+status and one evidence line. The final verdict is:
 
 `Verdict: pass|needs_work|blocked|override - next: <one move>`
 
-`pass` and `override` are refused with open P0-P2. `override` may be recorded
-only with `by=human`.
+`pass`/`override` refuse open P0-P2; only a human records `override`.
 
 In a holistic report, every P0-P2 finding id begins with its affected slice id,
 for example `M001-S02-H1-F1`. Open findings are grouped by slice and cause one
 `reopened` event per slice, whose reason retains all grouped ids.
 
+Slice review manifests are cumulative across coded rounds and mark current
+versus earlier paths; their code diff remains current-round-only. Holistic
+manifests are cumulative. Per-slice diffs appear only when the stat is at most
+4 KB, there are at most 64 unique paths, and combined evidence stays within
+32 KB; otherwise the prompt gives a local-inspection pointer.
+
 ## Stable status view
 
-`ledger.py status` prints one line per roadmap slice as
-`M001-S01 r1 <step>` followed by `next: <slice-or-none>`. frutlups 0.3 must emit
-the same text for the same roadmap and ledger, including `unblocked` and optional
-prompt `baseline` conformance. `ledger.py index` is a generated Markdown table;
-neither output is another state store.
+`ledger.py status` prints `M001-S01 r1 <step>` per slice and then `next`. frutlups
+0.3 must match status, normalized hashing, artifacts, baselines, and lifecycle
+folding. `ledger.py index` is generated; neither output is another state store.

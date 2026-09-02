@@ -38,7 +38,10 @@ contain framework tests; their authoritative full command is
 `verification.full` in `roadmap.yaml` and runs through
 `python scripts/verify.py <SLICE>`. The default calls
 `scripts/hermetic_verification.py`, which fails closed until the project fills
-its `COMMANDS` argv lists.
+its `COMMANDS` argv lists. Bare lists run from repository root; mappings such as
+`{"argv": ["npm", "test"], "cwd": "07_app/web"}` run from a safe project
+subdirectory. `TEMP`, `TMP`, and `VERIFICATION_SCRATCH` identify external
+scratch space so tools can keep caches and build residue outside the project.
 
 frutlups is optional. Its committed example is `frutlups.toml`. Machine-local
 executables live only in ignored `frutlups.local.toml`, whose schema is

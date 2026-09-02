@@ -18,7 +18,9 @@ Expand-Archive ..\my-project.zip ..\my-project
 Then edit `00_brief/`, replace the example `roadmap.yaml`, choose active
 workspace statuses, record decisions, and set a real project-owned
 `verification.full` command. The provided hermetic entry point fails closed
-until its `COMMANDS` list is customized. Run:
+until its `COMMANDS` list is customized with argv lists or safe per-directory
+argv/cwd mappings. Commands run from the project while temporary output is
+directed through the external `VERIFICATION_SCRATCH`. Run:
 
 ```powershell
 python scripts/roadmap.py check
