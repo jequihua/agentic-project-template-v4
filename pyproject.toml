@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentic-project-template-v4"
-version = "0.4.0"
+version = "0.4.1"
 description = "Manual-first agentic software project scaffold"
 requires-python = ">=3.11"
 dependencies = ["PyYAML>=6.0.3,<7"]

@@ -53,14 +53,14 @@ def _render(path, values, optional=()):
     unknown = found - KNOWN
     if unknown:
         raise ValueError(f"unknown placeholders: {sorted(unknown)}")
+    bare = re.sub(r"{{[a-z_]+}}", "", text)
+    if "{{" in bare or "}}" in bare:
+        raise ValueError("unresolved placeholder")
     for heading, key in optional:
         if not values.get(key):
             pattern = rf"\n## {re.escape(heading)}\n.*?(?=\n## |\Z)"
             text = re.sub(pattern, "", text, flags=re.S)
-    for key in found:
-        text = text.replace("{{" + key + "}}", str(values.get(key, "")))
-    if "{{" in text or "}}" in text:
-        raise ValueError("unresolved placeholder")
+    text = re.sub(r"{{([a-z_]+)}}", lambda match: str(values.get(match[1], "")), text)
     return text.rstrip() + "\n"
 
 

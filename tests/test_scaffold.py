@@ -405,6 +405,33 @@ class RoadmapLedgerTests(unittest.TestCase):
 
 
 class ManualLoopTests(unittest.TestCase):
+    def test_render_preserves_braces_in_substituted_values(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "template.md"
+            path.write_text("{{coder_notes}}\n{{diff_evidence}}\n", encoding="utf-8")
+            notes = "Literal {{ and }}; Jinja {{diff}}; known {{diff_evidence}}."
+            diff = "Nested {key: {item for item in items}}; known {{coder_notes}}."
+            rendered = prompt._render(path, {"coder_notes": notes, "diff_evidence": diff})
+            self.assertEqual(rendered, notes + "\n" + diff + "\n")
+
+    def test_render_rejects_malformed_template_braces(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "template.md"
+            for text in ("{{ diff }}", "}}", "{{", "{{coder_notes}}}}"):
+                with self.subTest(template=text):
+                    path.write_text(text, encoding="utf-8")
+                    with self.assertRaises(ValueError) as error:
+                        prompt._render(path, {"coder_notes": "notes"})
+                    self.assertEqual(str(error.exception), "unresolved placeholder")
+
+    def test_render_rejects_unknown_template_placeholder(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "template.md"
+            path.write_text("{{unknown}}\n", encoding="utf-8")
+            with self.assertRaises(ValueError) as error:
+                prompt._render(path, {"unknown": "value"})
+            self.assertEqual(str(error.exception), "unknown placeholders: ['unknown']")
+
     def test_complete_manual_loop_and_hash_check(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

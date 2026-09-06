@@ -52,5 +52,5 @@ Objective evidence: one sentence tied to acceptance and the receipt
 Verdict: pass|needs_work|blocked - next: one move
 ```
 
-Use one allowed value on each choice line. A pass requires zero open P0-P2.
+Return the report as the plain text of your final message, in exactly this shape, not enclosed in a code fence. Use one allowed value on each choice line. A pass requires zero open P0-P2.
 {{finding_id_rule}}
