@@ -327,14 +327,9 @@ def next_slice(rm, state):
             return item["id"]
     for milestone in rm["milestones"]:
         if milestone["status"] == "active":
-            return next(
-                (
-                    item["id"]
-                    for item in milestone["slices"]
-                    if state["slices"][item["id"]]["step"] != "accepted"
-                ),
-                None,
-            )
+            for item in milestone["slices"]:
+                if state["slices"][item["id"]]["step"] != "accepted":
+                    return item["id"]
     return None
 
 

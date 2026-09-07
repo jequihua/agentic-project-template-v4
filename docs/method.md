@@ -104,6 +104,14 @@ acceptance.
 
 ## Milestones
 
+Roadmap status is `planned`, `active`, or `done`. At least one milestone must
+be active unless all milestones are done. The architect marks done status;
+it does not create slice acceptance or a `milestone_done` ledger event.
+Next-slice selection prioritizes reopened work, then scans active milestones
+in order, skipping those whose slices are all accepted. It does not activate
+planned milestones or require holistic completion before considering the next
+active milestone. The rendered roadmap displays each declared status.
+
 A milestone's slices are accepted only through the ledger. If
 `holistic_review: false`, all accepted slices make it done without a
 `milestone_done` event. If true, a holistic review must pass before that event

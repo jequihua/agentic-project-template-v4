@@ -66,8 +66,10 @@ Events are applied in file order for each roadmap slice:
 | `reopened(new r)` | `fix` at new r |
 
 Wrong/decreasing rounds, illegal transitions, and unknown ids are errors. Next
-is the first open reopened slice, then the first non-accepted slice in the first
-active milestone. A holistic milestone also requires `milestone_done`.
+is the first open reopened slice in roadmap order. Otherwise, scan active
+milestones in order for the first non-accepted slice, skipping fully accepted
+ones. Planned/done milestones are skipped. Selection does not require
+`milestone_done`; holistic completion still does.
 
 Corrective rounds count prompt events above round 1; transport retries do not.
 Every candidate is validated and folded before append, so refusal changes no

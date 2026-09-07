@@ -284,6 +284,51 @@ Verdict: pass - next: accept the slice
 
 
 class RoadmapLedgerTests(unittest.TestCase):
+    def test_milestone_statuses_and_active_frontier(self) -> None:
+        rm = roadmap.load(ROOT)
+        second = json.loads(json.dumps(rm["milestones"][0]))
+        second["id"] = "M002"
+        second["slices"][0]["id"] = "M002-S01"
+        rm["milestones"].append(second)
+        for statuses, valid in (
+            (("active", "active"), True),
+            (("done", "done"), True),
+            (("done", "active"), True),
+            (("done", "planned"), False),
+            (("planned", "planned"), False),
+        ):
+            with self.subTest(statuses=statuses):
+                for milestone, status in zip(rm["milestones"], statuses):
+                    milestone["status"] = status
+                errors, _ = roadmap.validate(rm)
+                self.assertEqual(not errors, valid, errors)
+                if not valid:
+                    self.assertIn(
+                        "at least one milestone must be active unless all milestones are done",
+                        errors,
+                    )
+                self.assertIn(f"Status: {statuses[0]}", roadmap.render_markdown(rm))
+
+        for milestone in rm["milestones"]:
+            milestone["status"] = "active"
+        state = ledger.fold([], rm)
+        self.assertEqual(ledger.next_slice(rm, state), "M001-S01")
+        state["slices"]["M001-S01"]["step"] = "accepted"
+        for status, expected in (("active", "M002-S01"), ("planned", None), ("done", None)):
+            with self.subTest(next_milestone_status=status):
+                second["status"] = status
+                self.assertEqual(ledger.next_slice(rm, state), expected)
+        second["status"] = "active"
+        state["milestones_done"].add("M001")
+        self.assertEqual(ledger.next_slice(rm, state), "M002-S01")
+        state["slices"]["M002-S01"]["step"] = "accepted"
+        self.assertIsNone(ledger.next_slice(rm, state))
+        # A reopened slice retains priority, regardless of its milestone's status.
+        state["slices"]["M002-S01"].update(step="fix", reopened=True)
+        state["slices"]["M001-S01"]["step"] = "coding"
+        second["status"] = "done"
+        self.assertEqual(ledger.next_slice(rm, state), "M002-S01")
+
     def test_example_and_render_are_current(self) -> None:
         data = roadmap.load(ROOT)
         self.assertEqual(roadmap.validate(data)[0], [])
@@ -307,8 +352,8 @@ class RoadmapLedgerTests(unittest.TestCase):
         bad["allowed_prefixes"] = ["../escape/"]
         cases.append((bad, "unsafe"))
         bad = json.loads(json.dumps(data))
-        bad["milestones"][0]["status"] = "done"
-        cases.append((bad, "planned or active"))
+        bad["milestones"][0]["status"] = "paused"
+        cases.append((bad, "planned, active, or done"))
         bad = json.loads(json.dumps(data))
         bad["milestones"][0]["slices"][0]["memory_pages"] = ["x.md"]
         cases.append((bad, "memory block"))
