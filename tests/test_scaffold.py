@@ -441,6 +441,42 @@ class RoadmapLedgerTests(unittest.TestCase):
         fenced = "```markdown\n## Verdict\nVerdict: blocked - next: fake\n```\n" + PASS_REPORT
         self.assertEqual(ledger.parse_review(fenced)["verdict"], "pass")
 
+    def test_review_summary_accepts_literal_and_escaped_pipes(self) -> None:
+        for summary, expected in (
+            ("Run `a | b` before accepting", "Run `a | b` before accepting"),
+            (r"Compare a \| b", "Compare a | b"),
+            (r"Run `a \| b | c`", "Run `a | b | c`"),
+            (r"Ends with \|", "Ends with |"),
+        ):
+            with self.subTest(summary=summary):
+                row = f"| F1 | P3 | carried | {summary} |"
+                report = PASS_REPORT.replace(
+                    "| --- | --- | --- | --- |", "| --- | --- | --- | --- |\n" + row
+                )
+                parsed = ledger.parse_review(report)
+                self.assertEqual(
+                    parsed["findings"],
+                    [
+                        {
+                            "id": "F1",
+                            "severity": "P3",
+                            "disposition": "carried",
+                            "summary": expected,
+                        }
+                    ],
+                )
+        compact = PASS_REPORT.replace(
+            "| --- | --- | --- | --- |", "| --- | --- | --- | --- |\n|F1|P3|carried|end\\||"
+        )
+        self.assertEqual(ledger.parse_review(compact)["findings"][0]["summary"], "end|")
+        for row in ("| F1 | P3 | carried |", "| F1 | P3 | carried |   |"):
+            with self.subTest(invalid_row=row):
+                report = PASS_REPORT.replace(
+                    "| --- | --- | --- | --- |", "| --- | --- | --- | --- |\n" + row
+                )
+                with self.assertRaisesRegex(ValueError, "invalid findings row"):
+                    ledger.parse_review(report)
+
     def test_strict_ledger_read(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "ledger.jsonl"

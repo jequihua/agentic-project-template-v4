@@ -102,6 +102,9 @@ status and one evidence line. The final verdict is:
 
 `pass`/`override` refuse open P0-P2; only a human records `override`.
 
+Rows split on unescaped pipes; cells after the first three join with ` | ` as
+the summary. `\|` decodes to `|`. Fewer than four cells remain invalid.
+
 In a holistic report, every P0-P2 finding id begins with its affected slice id,
 for example `M001-S02-H1-F1`. Open findings are grouped by slice and cause one
 `reopened` event per slice, whose reason retains all grouped ids.
