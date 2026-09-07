@@ -547,6 +547,58 @@ Verdict: needs_work - next: reopen affected slices
 
 
 class AttributionAndPromptTests(unittest.TestCase):
+    def test_holistic_report_paths_are_reserved_across_prompts_and_rounds(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            prepare_real_loop(root)
+
+            def accept_round(round_no):
+                prompt.coding(root, "M001-S01")
+                (root / "07_app/feature.txt").write_text(f"round {round_no}\n", encoding="utf-8")
+                self.assertEqual(
+                    quiet_call(ledger.main, ["--root", str(root), "coded", "M001-S01"]), 0
+                )
+                self.assertTrue(verify.run(root, "M001-S01", 10)[0]["ok"])
+                report = f"05_governance/reviews/m001/M001-S01_r{round_no}_review.md"
+                (root / report).write_text(
+                    PASS_REPORT.replace("round 1", f"round {round_no}"), encoding="utf-8"
+                )
+                self.assertEqual(
+                    quiet_call(ledger.main, ["--root", str(root), "record", report]), 0
+                )
+                self.assertEqual(
+                    quiet_call(
+                        ledger.main, ["--root", str(root), "accept", "M001-S01", "--commit"]
+                    ),
+                    0,
+                )
+
+            accept_round(1)
+            first = "05_governance/reviews/m001/M001_holistic_review.md"
+            second = "05_governance/reviews/m001/M001_holistic_2_review.md"
+            for expected in (first, second):
+                text = (root / prompt.holistic(root, "M001")).read_text(encoding="utf-8")
+                self.assertIn(f"write only `{expected}`", text)
+            report_text = needs_report(1).replace("M001-S01 round 1", "M001 round holistic")
+            (root / first).write_text(report_text, encoding="utf-8")
+            original = (root / first).read_bytes()
+            self.assertEqual(
+                quiet_call(
+                    ledger.main, ["--root", str(root), "record", first, "--milestone", "M001"]
+                ),
+                0,
+            )
+            accept_round(2)
+            # An existing, unrecorded file also occupies its report name.
+            occupied = root / "05_governance/reviews/m001/M001_holistic_3_review.md"
+            occupied.write_text("operator draft\n", encoding="utf-8")
+            text = (root / prompt.holistic(root, "M001")).read_text(encoding="utf-8")
+            self.assertIn("write only `05_governance/reviews/m001/M001_holistic_4_review.md`", text)
+            self.assertEqual((root / first).read_bytes(), original)
+            self.assertEqual(occupied.read_text(encoding="utf-8"), "operator draft\n")
+            events = ledger.read(root / "05_governance/ledger.jsonl")
+            self.assertEqual(ledger.check(root, roadmap.load(root), events), [])
+
     def test_failed_verification_baselines_known_state_without_override(self) -> None:
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)

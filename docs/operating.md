@@ -46,6 +46,11 @@ milestone requires holistic review. Record the report with
 `ledger.py record <report> --milestone M001`; reopen named slices for blocking
 findings or record milestone completion after pass.
 
+Holistic report names use `<MID>_holistic_review.md`, then
+`<MID>_holistic_2_review.md`, `_3_`, and so on. The first free name excludes
+existing filesystem entries and paths already named in recorded holistic
+prompts or reports, so issuing another prompt cannot reuse an earlier report.
+
 Owner reopening uses
 `python scripts/ledger.py reopen M001-S01 --reason "<reason>" --by human`.
 When a blocked review's external decision is resolved, a human or architect

@@ -216,6 +216,29 @@ def review(root, sid):
     return rel
 
 
+def _holistic_report_path(root, mid, events):
+    base = f"05_governance/reviews/{mid.lower()}/{mid}_holistic"
+    pattern = rf"`({re.escape(base)}(?:_\d+)?_review\.md)`"
+    occupied = set()
+    for event in events:
+        if event["ev"] != "artifact" or event["scope"] != mid:
+            continue
+        if event["role"] == "holistic_report":
+            occupied.add(event["path"])
+        elif event["role"] == "holistic_prompt":
+            # Issued prompts reserve their report paths even before a report is saved.
+            text = (root / event["path"]).read_text(encoding="utf-8")
+            occupied.update(re.findall(pattern, text))
+    number = 1
+    while True:
+        suffix = "" if number == 1 else f"_{number}"
+        rel = f"{base}{suffix}_review.md"
+        path = root / rel
+        if rel not in occupied and not path.exists() and not path.is_symlink():
+            return rel
+        number += 1
+
+
 def holistic(root, mid):
     rm = roadmap.load(root)
     events = ledger.read(root / "05_governance/ledger.jsonl")
@@ -248,7 +271,7 @@ def holistic(root, mid):
                 f"Review: `{current['report']}`\n\n```json\n{receipt_text}\n```"
             )
     base = evidence.accepted_base(root, events, milestone)
-    report = f"05_governance/reviews/{mid.lower()}/{mid}_holistic_review.md"
+    report = _holistic_report_path(root, mid, events)
     values = {
         "slice_id": mid,
         "title": milestone["title"],
