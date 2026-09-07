@@ -181,6 +181,69 @@ class EvidenceHashTests(unittest.TestCase):
 
 
 class LedgerRemediationTests(unittest.TestCase):
+    def test_holistic_carried_p3_reaches_backlog_once(self) -> None:
+        for existing in (False, True):
+            with self.subTest(existing=existing), tempfile.TemporaryDirectory() as name:
+                root = Path(name)
+                project_copy(root)
+                append_accepted(root, "M001-S01")
+                backlog = root / "05_governance/backlog.md"
+                line = "- M001-H1-P3: polish later"
+                if existing:
+                    backlog.write_text(backlog.read_text(encoding="utf-8") + line + "\n")
+                report = root / "05_governance/reviews/m001/M001_holistic_review.md"
+                report.parent.mkdir(parents=True, exist_ok=True)
+                text = PASS_REPORT.replace("M001-S01 round 1", "M001 round holistic").replace(
+                    "| --- | --- | --- | --- |",
+                    "| --- | --- | --- | --- |\n| M001-H1-P3 | P3 | carried | polish later |",
+                )
+                report.write_text(text, encoding="utf-8")
+                args = [
+                    "--root",
+                    str(root),
+                    "record",
+                    report.relative_to(root).as_posix(),
+                    "--milestone",
+                    "M001",
+                ]
+                self.assertEqual(quiet_call(ledger.main, args), 0)
+                self.assertEqual(backlog.read_text(encoding="utf-8").splitlines().count(line), 1)
+                before = backlog.read_bytes()
+                # A completed milestone cannot be recorded twice; refusal adds nothing.
+                self.assertEqual(quiet_call(ledger.main, args), 2)
+                self.assertEqual(backlog.read_bytes(), before)
+
+    def test_holistic_backlog_is_unchanged_when_append_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            project_copy(root)
+            append_accepted(root, "M001-S01")
+            report = root / "05_governance/reviews/m001/M001_holistic_review.md"
+            report.parent.mkdir(parents=True, exist_ok=True)
+            text = PASS_REPORT.replace("M001-S01 round 1", "M001 round holistic").replace(
+                "| --- | --- | --- | --- |",
+                "| --- | --- | --- | --- |\n| M001-H1-P3 | P3 | carried | polish later |",
+            )
+            report.write_text(text, encoding="utf-8")
+            backlog = root / "05_governance/backlog.md"
+            before = backlog.read_bytes()
+            with mock.patch.object(ledger, "append", side_effect=ValueError("refused")):
+                self.assertEqual(
+                    quiet_call(
+                        ledger.main,
+                        [
+                            "--root",
+                            str(root),
+                            "record",
+                            report.relative_to(root).as_posix(),
+                            "--milestone",
+                            "M001",
+                        ],
+                    ),
+                    2,
+                )
+            self.assertEqual(backlog.read_bytes(), before)
+
     def test_review_prompt_artifact_is_neutral_validated_and_immutable(self) -> None:
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)

@@ -492,10 +492,26 @@ def _holistic_events(review, milestone, state, by, report):
     ]
 
 
+def _backlog_text(path, findings):
+    carried = [
+        f"- {item['id']}: {item['summary']}"
+        for item in findings
+        if item["severity"] == "P3" and item["disposition"] == "carried"
+    ]
+    if carried:
+        old = path.read_text(encoding="utf-8")
+        missing = [line for line in carried if line.split(":", 1)[0][2:] not in old]
+        if missing:
+            return old.rstrip() + "\n\n" + "\n".join(missing) + "\n"
+    return None
+
+
 def _record(root, value, args, rm, events, state):
     rel, path = _rel_file(root, value)
     review = parse_review(path.read_text(encoding="utf-8"))
     ledger_path = root / "05_governance/ledger.jsonl"
+    backlog = root / "05_governance/backlog.md"
+    backlog_text = _backlog_text(backlog, review["findings"])
     if args.milestone:
         milestone = next((item for item in rm["milestones"] if item["id"] == args.milestone), None)
         ready = (
@@ -533,6 +549,8 @@ def _record(root, value, args, rm, events, state):
             trial.append(complete)
         for candidate in candidates:
             append(ledger_path, candidate, rm)
+        if backlog_text is not None:
+            c.atomic_text(backlog, backlog_text)
         print(f"{args.milestone} holistic {review['verdict']}")
         return
     sid = review["identity"]
@@ -543,18 +561,6 @@ def _record(root, value, args, rm, events, state):
     waived = any(item["disposition"] == "waived_by_human" for item in review["findings"])
     if (review["verdict"] == "override" or waived) and args.by != "human":
         raise ValueError("override or waiver requires --by human")
-    carried = [
-        f"- {item['id']}: {item['summary']}"
-        for item in review["findings"]
-        if item["severity"] == "P3" and item["disposition"] == "carried"
-    ]
-    backlog = root / "05_governance/backlog.md"
-    backlog_text = None
-    if carried:
-        old = backlog.read_text(encoding="utf-8")
-        missing = [line for line in carried if line.split(":", 1)[0][2:] not in old]
-        if missing:
-            backlog_text = old.rstrip() + "\n\n" + "\n".join(missing) + "\n"
     event = {
         "ev": "reviewed",
         "by": args.by,
