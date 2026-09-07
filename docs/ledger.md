@@ -10,7 +10,7 @@
 | --- | --- |
 | `prompt` | `slice`, `round`, prompt `path`, `sha`; optional dirty `baseline` changed objects |
 | `artifact` | slice/milestone `scope`, positive round or `holistic`, `role`, `path`, `sha` |
-| `coded` | `slice`, `round`, `changed` (`path`, `sha`, `kind`), optional notes/usage |
+| `coded` | `slice`, `round`, `changed` (`path`, `sha`, `kind`), optional notes/usage including `cost_usd` |
 | `verified` | `slice`, `round`, receipt `receipt`, `sha`, `ok` |
 | `reviewed` | `slice`, `round`, `report`, `sha`, `verdict`, open ids, optional usage |
 | `accepted` | `slice`, `round`, optional already-known `commit` |

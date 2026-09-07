@@ -181,6 +181,41 @@ class EvidenceHashTests(unittest.TestCase):
 
 
 class LedgerRemediationTests(unittest.TestCase):
+    def test_coded_cost_validates_persists_and_folds(self) -> None:
+        for cost in (0, 2, 0.125):
+            with self.subTest(cost=cost), tempfile.TemporaryDirectory() as name:
+                root = Path(name)
+                project_copy(root)
+                rm = roadmap.load(root)
+                path = root / "05_governance/ledger.jsonl"
+                base = {"by": "architect", "slice": "M001-S01", "round": 1}
+                ledger.append(
+                    path, {**base, "ev": "prompt", "path": "p.md", "sha": SHA}, rm
+                )
+                ledger.append(path, {**base, "ev": "coded", "changed": [], "cost_usd": cost}, rm)
+                events = ledger.read(path)
+                self.assertEqual(events[-1]["cost_usd"], cost)
+                state = ledger.fold(events, rm)["slices"]["M001-S01"]
+                self.assertEqual(state["step"], "verifying")
+                self.assertEqual(state["round"], 1)
+
+    def test_coded_cost_rejects_invalid_values_like_reviewed_cost(self) -> None:
+        base = {
+            "schema": ledger.SCHEMA,
+            "t": "2026-09-07T00:00:00Z",
+            "by": "architect",
+            "slice": "M001-S01",
+            "round": 1,
+        }
+        for fields in (
+            {"ev": "coded", "changed": []},
+            {"ev": "reviewed", "report": "r.md", "sha": SHA, "verdict": "pass", "open": []},
+        ):
+            for cost in ("0.25", None, True, -1, -0.25, [], {}):
+                with self.subTest(event=fields["ev"], cost=cost):
+                    with self.assertRaisesRegex(ValueError, "invalid text, usage, or actor field"):
+                        ledger._validate({**base, **fields, "cost_usd": cost})
+
     def test_holistic_carried_p3_reaches_backlog_once(self) -> None:
         for existing in (False, True):
             with self.subTest(existing=existing), tempfile.TemporaryDirectory() as name:

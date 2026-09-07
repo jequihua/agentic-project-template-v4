@@ -40,6 +40,7 @@ FIELDS = {
         "secs",
         "tokens_in",
         "tokens_out",
+        "cost_usd",
     },
     "verified": {"slice", "round", "receipt", "sha", "ok"},
     "reviewed": {
@@ -64,7 +65,7 @@ FIELDS = {
 }
 OPTIONAL = {
     "prompt": {"baseline"},
-    "coded": {"notes_path", "seat", "secs", "tokens_in", "tokens_out"},
+    "coded": {"notes_path", "seat", "secs", "tokens_in", "tokens_out", "cost_usd"},
     "reviewed": {"seat", "secs", "tokens_in", "tokens_out", "cost_usd"},
     "accepted": {"commit"},
     "milestone_done": {"holistic_report"},
