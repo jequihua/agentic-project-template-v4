@@ -74,7 +74,9 @@ def _argv(values):
     return "\n\n".join("```text\n" + " ".join(command) + "\n```" for command in commands)
 
 
-def _render(path, values, optional=(), complete=False, *, limit=REVIEW_LIMIT, diagnose=True):
+def _render(
+    path, values, optional=(), complete=False, *, limit=REVIEW_LIMIT, diagnose=True, inapplicable=()
+):
     if path.stat().st_size > limit:
         raise ValueError(f"template framing exceeds {limit} bytes; reduce the custom template")
     text = evidence.read_excerpt(path.parent, path.name, limit + 1).replace("\r\n", "\n")
@@ -91,7 +93,7 @@ def _render(path, values, optional=(), complete=False, *, limit=REVIEW_LIMIT, di
             text = re.sub(pattern, "", text, flags=re.DOTALL)
     if diagnose:
         for key in sorted(set(re.findall(r"{{([a-z_]+)}}", text))):
-            if not values.get(key):
+            if not values.get(key) and key not in inapplicable:
                 print(f"diagnostic: template renders empty {key}", file=sys.stderr)
     text = re.sub(r"{{([a-z_]+)}}", lambda match: str(values.get(match[1], "")), text)
     # Preserve project-owned templates while making omitted authority visible.
@@ -437,9 +439,6 @@ def coding(root, sid, allow_dirty=False, *, preview=False, backend="manual"):
     values = _values(envelope)
     values["outcome_contract"] = _finish(backend, sid, current["round"])
     artifacts = []
-    if _v2(rm):
-        _context(values, "open_findings", sid, artifacts)
-        envelope["findings"] = values["open_findings"]
 
     def render(diagnose=False):
         return _render(
@@ -458,14 +457,17 @@ def coding(root, sid, allow_dirty=False, *, preview=False, backend="manual"):
 
     text = render()
     if _v2(rm) and len(text.encode("utf-8")) > CODING_LIMIT and values["open_findings"]:
-        if artifacts:
-            rel, body = artifacts[0]
-            ref = _ref(root, rel, c.evidence_sha_bytes(body.encode("utf-8")))
-        else:
-            ref = _support(sid, "context.md", values["open_findings"] + "\n", artifacts)
-        values["open_findings"] = "Read complete findings and recovery context: " + ref
-        envelope["findings"] = values["open_findings"]
+        _context(values, "open_findings", sid, artifacts)
         text = render()
+        if len(text.encode("utf-8")) > CODING_LIMIT:
+            if artifacts:
+                rel, body = artifacts[0]
+                ref = _ref(root, rel, c.evidence_sha_bytes(body.encode("utf-8")))
+            else:
+                ref = _support(sid, "context.md", values["open_findings"] + "\n", artifacts)
+            values["open_findings"] = "Read complete findings and recovery context: " + ref
+            text = render()
+        envelope["findings"] = values["open_findings"]
     _sized(text, values, CODING_LIMIT)
     text = render(True)
     diagnostics = _diagnostics(root, envelope)
@@ -539,6 +541,7 @@ def _render_review(root, values, version2, *, diagnose=True):
             ),
             version2,
             diagnose=diagnostics,
+            inapplicable=() if version2 else ("finding_updates",),
         )
 
     text = render()

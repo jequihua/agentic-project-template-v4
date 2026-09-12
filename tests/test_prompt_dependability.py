@@ -201,6 +201,62 @@ class DependablePromptTests(unittest.TestCase):
                 any(path.read_text(encoding="utf-8").strip() == context.strip() for path in pages)
             )
 
+    def test_corrective_findings_stay_inline_when_whole_coding_prompt_fits(self):
+        for backend in ("manual", "autonomous"):
+            with self.subTest(backend=backend), tempfile.TemporaryDirectory() as name:
+                root = Path(name)
+                fixture(root)
+                self._verified(root)
+                rows = [
+                    f"| {SID}-F{index} | P2 | open | " + "Check café result. " * 10 + " |"
+                    for index in range(12)
+                ]
+                report = PASS_REPORT.replace(
+                    "| --- | --- | --- | --- |",
+                    "| --- | --- | --- | --- |\n" + "\n".join(rows),
+                ).replace("Verdict: pass", "Verdict: needs_work")
+                report = report.replace(
+                    "Objective status: achieved", "Objective status: not_achieved"
+                )
+                rel = "05_governance/reviews/m001/corrective.md"
+                (root / rel).write_text(report, encoding="utf-8")
+                self.assertEqual(quiet_call(ledger.main, ["--root", str(root), "record", rel]), 0)
+                rm, events, state = prompt._load(root)
+                context = evidence.findings_context(root, state["slices"][SID], events, SID)
+                self.assertGreater(len(context.encode("utf-8")), 2048)
+                before = self._snapshot(root)
+                preview = prompt.coding(root, SID, preview=True, backend=backend)
+                self.assertEqual(before, self._snapshot(root))
+                self.assertLessEqual(len(preview.encode("utf-8")), prompt.CODING_LIMIT)
+                self.assertIn(context, preview)
+                issued = prompt.coding(root, SID, backend=backend)
+                self.assertEqual(preview, (root / issued).read_text(encoding="utf-8"))
+                self._check_pages(root, preview)
+                self.assertFalse(list((root / "05_governance/reviews/m001").glob("*context.md")))
+                events = ledger.read(root / "05_governance/ledger.jsonl")
+                envelope = events[-1]["envelope"]
+                frozen = json.loads((root / envelope["path"]).read_text(encoding="utf-8"))
+                self.assertEqual(frozen["findings"], context)
+                self.assertEqual(ledger.fold(events, rm)["slices"][SID]["round"], 2)
+
+    def test_legacy_review_suppresses_only_inapplicable_finding_update_diagnostic(self):
+        for version in (1, 2):
+            with self.subTest(version=version), tempfile.TemporaryDirectory() as name:
+                root = Path(name)
+                fixture(root, schema=f"frutlups.roadmap/{version}")
+                values = prompt._review_values(self._envelope(root), "reviews/result.md")
+                values.update(diff_manifest="No changes", diff_evidence="No diff", receipt="")
+                with contextlib.redirect_stderr(io.StringIO()) as err:
+                    text = prompt._render_review(root, values, version == 2)
+                self.assertNotIn("empty finding_updates", err.getvalue())
+                self.assertIn("empty receipt", err.getvalue())
+                self.assertEqual("## Finding updates" in text, version == 2)
+                path = root / "custom.md"
+                path.write_text("{{finding_updates}}\n", encoding="utf-8")
+                with contextlib.redirect_stderr(io.StringIO()) as err:
+                    prompt._render(path, {"finding_updates": ""}, complete=True)
+                self.assertIn("empty finding_updates", err.getvalue())
+
     def test_near_cap_blocked_outcome_resumes_with_complete_reference(self):
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)

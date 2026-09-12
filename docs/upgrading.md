@@ -61,14 +61,23 @@ There is no automatic migration service. Reverting scripts or editing `/2` back
 to `/1` after new events were written cannot undo a protocol upgrade safely.
 Inspect and recover the real recorded state instead.
 
-Legacy reports keep their `/1` meaning. A same-scope legacy finding re-listed in
-a later report updates its original projected disposition; the source remains
-the first report path/hash/ID. The reader diagnoses old cross-scope ID collisions
-and architect holistic waivers without retroactively rejecting that accepted
-history. `/2` reports require explicit source-bound updates and human-only
-waivers. Never edit a legacy review or ledger to satisfy a new rule. Non-Git
-standalone `/1` ledger/render APIs retain their old carve-out; `/2` writers,
-including derived roadmap rendering, require the shared Git lock.
+Legacy same-scope re-lists update the original disposition, retaining its first
+report path/hash/ID. Cross-scope re-lists, including a milestone report closing
+a slice finding, leave the slice source open. Before a later `/2` pass, close
+that source explicitly. Put this section before Closure Decision, substituting
+your original report identity (this example uses the conformance fixture):
+
+```markdown
+## Finding updates
+| source | sha | id | disposition | related |
+| --- | --- | --- | --- | --- |
+| 05_governance/reviews/first.md | 972407208e033095845d05ef8c13fa07071cde1f469f3dc0fa1122da3a69e4a5 | F1 | closed_by_review | - |
+```
+
+Legacy collisions and architect holistic waivers retain their meaning with
+diagnostics; `/2` waivers require human authority. Never edit historical evidence
+to satisfy new rules. Non-Git `/1` ledger/render APIs retain their carve-out;
+`/2` writers, including derived rendering, require the shared Git lock.
 
 ## Exceptional commands
 

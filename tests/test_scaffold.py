@@ -209,7 +209,7 @@ class ScaffoldContractTests(unittest.TestCase):
         # to disguise its size, or compress readable validation syntax to pass.
         byte_limits = {
             "_common.py": 9 * 1024,
-            "_evidence.py": 20 * 1024,  # Bound Git metadata and preserve readable context.,
+            "_evidence.py": 20 * 1024,  # Bound Git metadata and preserve readable context.
             "roadmap.py": 18 * 1024,
             "ledger.py": 48 * 1024,
             "verify.py": 9 * 1024,
@@ -219,7 +219,7 @@ class ScaffoldContractTests(unittest.TestCase):
             "_protocol.py": 22 * 1024,  # Strict readers and command-scoped immutable JSON reads.
             "_commit.py": 28 * 1024,  # Bounded blob batches and exact witness recovery.
             "_findings.py": 12 * 1024,  # Linear projection and preserved legacy meaning.
-            "_git.py": 10 * 1024,  # Shared bounded object hashing, no aggregate payload ceiling.,
+            "_git.py": 10 * 1024,  # Shared bounded object hashing, no aggregate payload ceiling.
             "_workspace.py": 6 * 1024,
             "_process.py": 9 * 1024,
             "_integrity.py": 16 * 1024,
