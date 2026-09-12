@@ -294,7 +294,7 @@ class CommitTests(unittest.TestCase):
             commit.recover(self.root, self.events, self.rm, execute=True)
         with self.assertRaisesRegex(ValueError, "unresolved"):
             commit.cancel_check(self.root, self.events, self.rm, intent["id"])
-        commit.resolve_inflight(self.root, intent["id"])
+        commit.resolve_inflight(self.root, intent["id"], "fixture Git process exited", "architect")
         self.assertTrue(marker.with_name("template-commit-resolved-" + intent["id"]).exists())
         self.assertEqual(
             commit.recover(self.root, self.events, self.rm, execute=True)[0]["state"], "completed"

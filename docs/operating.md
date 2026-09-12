@@ -5,10 +5,14 @@
 Start from an archive of the template so framework tests are omitted. Read
 `AGENTS.md` and `initialization/architect.md`. Populate `00_brief/`, choose
 workspace statuses, replace the example roadmap, and set a real project-owned
-full verification argv. Validate and render:
+full verification argv. From the extracted project directory, validate,
+initialize Git and make a baseline (configure your Git name/email if needed):
 
 ```powershell
 python scripts/roadmap.py check
+git init
+git add --all
+git commit -m "Initialize project"
 python scripts/roadmap.py render
 python scripts/ledger.py status
 ```
@@ -43,6 +47,13 @@ keep incompatible runners disabled.
 At any time, `ledger.py status` shows the fold and next slice; `ledger.py index`
 prints history. Do not create hand-maintained state or index files.
 
+With ledger-only acceptance, inspect and commit the accepted product and loop
+evidence before starting the next slice. This housekeeping is intentional: new
+slices require a clean tree unless an architect explicitly admits dirty state.
+`ledger.py prompt <slice> <saved-prompt>` records a prepared legacy `/1` prompt
+only. `/2` requires `prompt.py`, including for customized templates, so saved
+text cannot bypass the complete frozen-envelope and prompt-size checks.
+
 ## Steering and closure
 
 Edit the roadmap only between stable loop steps, then check and render it. Add
@@ -66,11 +77,18 @@ Owner reopening uses
 After a blocker, a human or architect uses
 `ledger.py resolve M001-S01 --reason "<new fact>" --authority <decision-or-evidence>`.
 This preserves the original envelope and blocker; it grants no undeclared budget.
+The resumed blocked round keeps the original acceptance scope. If the resolution
+changes that scope, the architect plans a new slice; editing roadmap acceptance
+does not override the frozen blocker. Ordinary needs-work rounds read the current
+admitted roadmap when issued.
 Legacy `/1` reviewer blocks retain `ledger.py unblock <slice> --reason ...`.
 
 Corrective prompts recognize ledger-known prompts, receipts, reports, notes,
 and unchanged same-slice products automatically. A changed known path remains
 new work; a foreign artifact or injected prompt remains unknown and refuses.
+After acceptance, committed owner hotfixes may match HEAD during holistic review
+and close. They are visible in current holistic evidence; the earlier review
+still approves only its original candidate. Uncommitted drift still refuses.
 
 ## Recovery
 
@@ -85,6 +103,10 @@ interruption, inspect Git and the ledger before choosing one move:
   diagnostically useful, then rerun `verify.py`; the successful atomic write and
   event append replace the incomplete attempt.
 - Report exists, no `reviewed`: run `ledger.py record`.
+- A command refused before any ledger append: newly created unchanged immutable
+  JSON artifacts are removed. Existing artifacts and uncertain/crashed appends
+  are preserved. Inspect only the named unrecorded path, verify it is absent from
+  ledger references, and obtain architect attribution before moving it aside.
 - Approval has a pending commit intent: use `ledger.py recover` to inspect, then
   `recover --execute` to complete only missing exact Git work. Never repeat approval.
   Unfinishable intent needs authorized cancellation; see [recovery](upgrading.md).
@@ -95,6 +117,32 @@ interruption, inspect Git and the ledger before choosing one move:
 
 `ledger.py check` detects evidence drift. Resolve the cause; do not update hashes
 to silence it.
+
+An unfinished external invocation freezes new work even when its local output
+was lost. `ledger.py attempt <event.json>` records a reservation, completion or
+review checkpoint. For a known completed `review-1`, save this exact shape as
+ignored `local_state/attempt.json`, using the actual invocation and known metrics:
+
+```json
+{"ev":"attempt_finished","by":"architect","invocation":"review-1",
+ "status":"completed","usage":{"completeness":"unknown"}}
+```
+
+Run `python scripts/ledger.py attempt local_state/attempt.json`. Missing metrics
+remain unknown. For unknown completion, first establish the external process is
+finished, record the observed evidence in `00_brief/decisions.md`, then save:
+
+```json
+{"ev":"attempt_finished","by":"human","invocation":"review-1",
+ "status":"resolved","usage":{"completeness":"unknown"},
+ "reason":"Process ended; output and usage could not be recovered",
+ "evidence":[{"path":"00_brief/decisions.md","sha":"<normalized SHA-256>"}]}
+```
+
+Replace the hash with the actual evidence identity. From the project directory:
+`python -B -c "import sys; sys.path.insert(0,'scripts'); import _common as c; print(c.sha(c.Path('00_brief/decisions.md')))"`.
+Run the same `attempt` command. This attributes unknown work without inventing
+success, usage or new budget. JSON input is bounded to 2 MiB before parsing.
 
 CLI file arguments may use `/`, `\`, or one leading `./`/`.\`; ledger content
 always stores canonical repository-relative POSIX paths. Absolute paths,

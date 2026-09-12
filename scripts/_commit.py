@@ -13,10 +13,9 @@ from uuid import uuid4
 import _common as c
 import _git as g
 
-
 SCHEMA = "frutlups.commit-manifest/1"
 LEDGER = "05_governance/ledger.jsonl"
-BLOB_LIMIT = 64 * 1024 * 1024
+BLOB_LIMIT = g.BLOB_LIMIT
 OID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 SHA = re.compile(r"[0-9a-f]{64}$")
 OPERATION = re.compile(r"[0-9a-f]{32}$")
@@ -41,6 +40,10 @@ def _head(root):
 
 
 def _tree(root, revision):
+    cache = c.cache("commit_trees") if OID.fullmatch(revision) else None
+    key = (str(Path(root).resolve()), revision)
+    if cache is not None and key in cache:
+        return cache[key]
     data = g.run(root, "ls-tree", "-r", "-z", "--full-tree", revision).stdout
     output = {}
     for row in data.split(b"\0"):
@@ -49,35 +52,9 @@ def _tree(root, revision):
         info, path = row.split(b"\t", 1)
         mode, kind, oid = info.decode("ascii").split()
         output[c.safe_rel(path.decode("utf-8"))] = (mode, kind, oid)
-    return output
-
-
-def _blobs(root, objects):
-    objects = list(dict.fromkeys(objects))
-    if not objects:
-        return {}
-    data = g.run(
-        root,
-        "cat-file",
-        "--batch",
-        input="".join(o + "\n" for o in objects).encode(),
-        limit=BLOB_LIMIT,
-    ).stdout
-    output = {}
-    offset = 0
-    for oid in objects:
-        end = data.find(b"\n", offset)
-        header = data[offset:end].decode("ascii").split()
-        if len(header) != 3 or header[0] != oid or header[1] != "blob":
-            raise ValueError("commit content is not an available blob")
-        size = int(header[2])
-        start = end + 1
-        output[oid] = data[start : start + size]
-        offset = start + size + 1
-        if offset > len(data) or data[offset - 1 : offset] != b"\n":
-            raise ValueError("incomplete Git blob evidence")
-    if offset != len(data):
-        raise ValueError("unexpected Git blob evidence")
+    if cache is not None and cache.get(None, 0) + len(data) <= g.OUTPUT_LIMIT:
+        cache[key] = output
+        cache[None] = cache.get(None, 0) + len(data)
     return output
 
 
@@ -85,7 +62,15 @@ def _at(root, tree, path):
     row = tree.get(path)
     if row is None or row[1] != "blob":
         raise ValueError("missing committed evidence: " + path)
-    return _blobs(root, [row[2]])[row[2]]
+    cache = c.cache("commit_small_blobs")
+    key = (str(Path(root).resolve()), row[2])
+    if cache is not None and key in cache:
+        return cache[key]
+    ((_, data),) = g.read_blobs(root, [row[2]])
+    if cache is not None and cache.get(None, 0) + len(data) <= g.OUTPUT_LIMIT:
+        cache[key] = data
+        cache[None] = cache.get(None, 0) + len(data)
+    return data
 
 
 def _storage(root, paths):
@@ -167,7 +152,7 @@ def request_intent(root, paths, scope, message, rm, artifact_dir):
     initial_index = _tree(root, index_tree)
     storage = _storage(root, paths) if paths else {}
     deleted = [path for path in paths if not c.repo_path(root, path).exists()]
-    old_blobs = _blobs(root, [parent_tree[p][2] for p in deleted if p in parent_tree])
+    old_blobs = g.blob_hashes(root, [parent_tree[p][2] for p in deleted if p in parent_tree])
     entries = []
     for path in paths:
         target = c.repo_path(root, path)
@@ -183,7 +168,7 @@ def request_intent(root, paths, scope, message, rm, artifact_dir):
                 continue
             if old[1] != "blob":
                 raise ValueError("approved deletion has no parent blob: " + path)
-            digest = _hash(old_blobs[old[2]], kind)
+            digest = old_blobs[old[2]][kind]
             git_mode = old[0]
         else:
             digest = _hash(_read(target), kind)
@@ -219,10 +204,7 @@ def request_intent(root, paths, scope, message, rm, artifact_dir):
     }
     target.parent.mkdir(parents=True, exist_ok=True)
     encoded = _json(manifest).encode("utf-8")
-    with target.open("xb") as stream:
-        stream.write(encoded)
-        stream.flush()
-        os.fsync(stream.fileno())
+    c.artifact_text(target, encoded.decode("utf-8"))
     return {
         "id": operation,
         "parent": parent,
@@ -317,14 +299,13 @@ def _ledger_prefix(root, event, manifest):
     raise ValueError("commit approval is missing from the working ledger")
 
 
-def _candidates(root, intent, *, unique=True):
-    g.run(root, "cat-file", "-e", intent["parent"] + "^{commit}", limit=1024)
+def _candidates(root, intent):
     result = g.run(
         root,
         "log",
         "--all",
         "--ancestry-path",
-        intent["parent"] + "..",
+        intent["parent"] + "^{commit}..",
         "--max-count=10001",
         "--format=%H%x00%P%x00%B%x00",
     )
@@ -333,15 +314,13 @@ def _candidates(root, intent, *, unique=True):
     if count > 10_000:
         raise ValueError("commit witness search exceeds 10000 descendant commits")
     found = []
-    trailer = "Template-Operation: " + intent["id"]
+    message_expected = intent["message"] + "\n\nTemplate-Operation: " + intent["id"]
     for index in range(0, len(fields) - 2, 3):
         oid = fields[index].decode("ascii").strip()
         parents = fields[index + 1].decode("ascii").split()
         message = fields[index + 2].decode("utf-8", "replace")
-        if trailer in message.splitlines():
+        if parents == [intent["parent"]] and message.strip() == message_expected:
             found.append((oid, parents, message))
-    if unique and len(found) > 1:
-        raise ValueError("duplicate commit witnesses for operation " + intent["id"])
     return found
 
 
@@ -354,7 +333,8 @@ def _candidate(root, tree, parent_tree, manifest, intent, prefix):
     for path, mode in ((LEDGER, ledger_mode), (intent["manifest"]["path"], "100644")):
         if tree.get(path, ())[:2] != (mode, "blob"):
             raise ValueError("framework commit evidence type or mode differs: " + path)
-    objects = []
+    framework = [LEDGER, intent["manifest"]["path"]]
+    objects = [tree[path][2] for path in framework]
     for entry in manifest["entries"]:
         path = entry["path"]
         row = tree.get(path)
@@ -365,16 +345,14 @@ def _candidate(root, tree, parent_tree, manifest, intent, prefix):
         if row is None or row[:2] != (entry["mode"], "blob"):
             raise ValueError("approved file type or mode differs: " + path)
         objects.append(row[2])
-    blobs = _blobs(root, objects)
+    blobs = g.blob_hashes(root, objects)
     for entry in manifest["entries"]:
         source = parent_tree if entry["state"] == "deleted" else tree
-        data = blobs[source[entry["path"]][2]]
-        if _hash(data, entry["storage"]) != entry["sha"]:
+        if blobs[source[entry["path"]][2]][entry["storage"]] != entry["sha"]:
             raise ValueError("approved Git blob content differs: " + entry["path"])
-    committed_ledger = _at(root, tree, LEDGER)
-    if c.evidence_sha_bytes(committed_ledger) != c.evidence_sha_bytes(prefix):
+    if blobs[tree[LEDGER][2]]["normalized"] != c.evidence_sha_bytes(prefix):
         raise ValueError("committed ledger is not the intended ordered approval prefix")
-    manifest_hash = c.evidence_sha_bytes(_at(root, tree, intent["manifest"]["path"]))
+    manifest_hash = blobs[tree[intent["manifest"]["path"]][2]]["normalized"]
     if manifest_hash != intent["manifest"]["sha"]:
         raise ValueError("committed manifest differs from approval")
 
@@ -394,7 +372,18 @@ def _load(root, event, candidate=None):
         expected_message = intent["message"] + "\n\nTemplate-Operation: " + intent["id"]
         if candidate[1] != [intent["parent"]] or candidate[2].strip() != expected_message:
             raise ValueError("commit witness has the wrong parent or message")
-        _candidate(root, tree, _tree(root, intent["parent"]), manifest, intent, prefix)
+        cache = c.cache("commit_witnesses")
+        key = (
+            str(Path(root).resolve()),
+            candidate[0],
+            _json(event),
+            intent["manifest"]["sha"],
+            c.evidence_sha_bytes(prefix),
+        )
+        if cache is None or key not in cache:
+            _candidate(root, tree, _tree(root, intent["parent"]), manifest, intent, prefix)
+            if cache is not None:
+                cache[key] = True
     return intent, manifest, prefix
 
 
@@ -412,24 +401,29 @@ def status(root, events, rm):
         seen.add(intent["id"])
         state = "cancelled" if intent["id"] in cancelled else "pending"
         row = {"id": intent["id"], "scope": event.get("slice", event.get("milestone"))}
-        candidates = _candidates(root, intent, unique=state != "cancelled")
+        candidates = _candidates(root, intent)
+        valid, failures = [], []
+        for candidate in candidates:
+            try:
+                _load(root, event, candidate)
+            except ValueError as exc:
+                failures.append(exc)
+                continue
+            valid.append(candidate)
+        if len(valid) > 1 and state != "cancelled":
+            raise ValueError("duplicate commit witnesses for operation " + intent["id"])
         if state == "cancelled":
             _load(root, event)
-            for candidate in candidates:
-                try:
-                    _load(root, event, candidate)
-                except ValueError:
-                    continue
+            if valid:
                 raise ValueError("cancelled intent has an unexpected completion witness")
             row["state"] = state
             output.append(row)
             continue
-        if candidates:
-            _load(root, event, candidates[0])
-            if state == "cancelled":
-                raise ValueError("cancelled intent has an unexpected completion witness")
-            row.update(state="completed", commit=candidates[0][0])
+        if valid:
+            row.update(state="completed", commit=valid[0][0])
         else:
+            if failures:
+                raise failures[0]
             _load(root, event)
             row["state"] = state
         output.append(row)
@@ -443,31 +437,59 @@ def _marker(root):
     return (Path(root) / directory).resolve() / "template-commit-inflight"
 
 
-def resolve_inflight(root, operation_id, reason=None, by=None):
+def resolve_inflight(root, operation_id, reason, by):
     """Caller must first obtain explicit human/architect attribution of Git exit."""
+    valid = by in ("human", "architect") and isinstance(reason, str) and reason.strip()
+    if not valid:
+        raise ValueError("Git attribution requires human/architect and a reason")
+    if not OPERATION.fullmatch(str(operation_id)):
+        raise ValueError("invalid commit operation identity")
     marker = _marker(root)
     if marker.exists():
+        if marker.is_symlink() or not marker.is_file():
+            raise ValueError("in-flight Git marker must remain a regular file")
         data = json.loads(_read(marker, 4096))
         if data.get("operation") != operation_id:
             raise ValueError("in-flight Git marker belongs to another operation")
-        if reason is not None or by is not None:
-            valid = by in ("human", "architect") and isinstance(reason, str) and reason.strip()
-            if not valid:
-                raise ValueError("Git attribution requires human/architect and a reason")
-            data["resolution"] = {"by": by, "reason": reason}
+        data["resolution"] = {"by": by, "reason": reason}
         # Preserve diagnostics; resolution does not manufacture an approval or Git witness.
         resolved = marker.with_name("template-commit-resolved-" + operation_id)
         c.atomic_text(resolved, _json(data))
         marker.unlink()
 
 
-def _idle(root):
-    marker = _marker(root)
-    if marker.exists():
-        raise ValueError("prior Git dispatch is unresolved; architect must attribute its exit")
+def _index_idle(root):
     directory = g.run(root, "rev-parse", "--absolute-git-dir", limit=4096).stdout.decode().strip()
     if (Path(directory) / "index.lock").exists():
         raise ValueError("Git index.lock exists; resolve the in-flight Git operation first")
+
+
+def _idle(root):
+    if _marker(root).exists():
+        raise ValueError("prior Git dispatch is unresolved; architect must attribute its exit")
+    _index_idle(root)
+
+
+def _resolve_completed_marker(root, rows, events):
+    marker = _marker(root)
+    if not marker.exists():
+        return
+    if marker.is_symlink() or not marker.is_file():
+        raise ValueError("in-flight Git marker must remain a regular file")
+    data = json.loads(_read(marker, 4096))
+    row = next((item for item in rows if item["id"] == data.get("operation")), None)
+    if row is None or row["state"] != "completed":
+        return  # Pending/unknown ownership still needs explicit exit attribution.
+    event = next(item for item in events if item.get("commit_intent", {}).get("id") == row["id"])
+    if data.get("parent") != event["commit_intent"]["parent"]:
+        raise ValueError("in-flight Git marker parent differs from the witnessed operation")
+    _index_idle(root)
+    # status already proved the exact immutable commit; this archives completion,
+    # not an inferred PID exit or permission to terminate a process.
+    data["completion"] = {"commit": row["commit"]}
+    resolved = marker.with_name("template-commit-resolved-" + row["id"])
+    c.atomic_text(resolved, _json(data))
+    marker.unlink()
 
 
 def cancel_check(root, events, rm, operation_id):
@@ -480,7 +502,7 @@ def cancel_check(root, events, rm, operation_id):
     event = events_for_id[0]
     intent = _intent(event["commit_intent"])
     _load(root, event)
-    for candidate in _candidates(root, intent, unique=False):
+    for candidate in _candidates(root, intent):
         try:
             _load(root, event, candidate)
         except ValueError:
@@ -538,6 +560,8 @@ def _boundary(root, policy, tree):
 def recover(root, events, rm, execute=False):
     """Recognize completion first; otherwise perform only exact missing Git work."""
     rows = status(root, events, rm)
+    if execute:
+        _resolve_completed_marker(root, rows, events)
     pending = next((r for r in rows if r["state"] == "pending"), None)
     if pending is None:
         return rows

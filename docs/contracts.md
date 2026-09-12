@@ -15,7 +15,9 @@ All references are `{path, sha}`: a strict repository-relative POSIX regular fil
 and its 64-character lowercase SHA-256. Framework evidence hashes normalize CRLF
 to LF only when no NUL exists; lone CR and binary bytes are unchanged. CLI inputs
 may normalize backslashes and one leading `./`. Unknown keys are errors. Events
-remain bounded JSON objects, one per line, with `schema`, UTC `t`, `ev`, `by`.
+are one JSON object per line with `schema`, `t`, `ev`, `by`; `/2` validation
+limits each event to 2 MiB. The attempt CLI bounds input before parsing. `t` is
+a real UTC timestamp in exact `YYYY-MM-DDTHH:MM:SSZ` form.
 The version-2 schema is `frutlups.ledger/2`; legacy fields retain their meanings.
 
 Each mutation owns byte 0 of `<git-common-dir>/frutlups-writer.lock`: Windows
@@ -24,6 +26,8 @@ artifact/ledger/Git effects. The file contains one arbitrary byte; its existence
 is not authority. A process may reenter its own lock. Compatible runners hold the
 same lock for the whole run. Status takes no lock and may observe a stable prefix
 while a writer is working. Do not kill another owner.
+Only legacy non-Git `/1` standalone ledger/render APIs bypass this lock; `/2`
+writers require a Git repository, including derived `roadmap.py render`.
 
 ## Immutable envelopes and evidence
 
@@ -31,7 +35,12 @@ A `/2 prompt` adds `envelope: {path,sha}`. The envelope artifact has schema
 `frutlups.envelope/2` and freezes the slice/round, objective, acceptance, non-goals,
 read-first, effective allowed/forbidden paths, focused/full argv, advisory notes,
 prior findings and resolution. Review uses that recorded envelope. Roadmap edits
-cannot silently change the acceptance envelope of issued work.
+cannot silently change the acceptance envelope of issued work. Exact keys are
+`schema,slice,round,title,objective,acceptance,non_goals,read_first,allowed_prefixes,
+forbidden,focused,full,runtime,timeout_seconds,observation,notes,findings,memory`.
+`findings` carries prior findings, blocker and resolution context as applicable.
+Blocked resumption preserves that envelope;
+materially changed scope needs a new slice.
 
 A `/2 coded` retains `changed` for the current round and adds `result`
 (`implemented|blocked_authority|blocked_environment`) and `manifest: {path,sha}`.
@@ -46,13 +55,16 @@ changed them, including changes already committed to HEAD. Record that current
 identity in the new round; it does not rewrite or reattribute historical events.
 At milestone closure, latest globally recorded identities supersede earlier
 accepted-slice file identities while old committed witnesses retain their own
-historical meaning.
+historical meaning. Accepted paths may also match committed HEAD after an owner
+hotfix. This does not extend the old approval to that hotfix; holistic review
+examines current evidence. Uncommitted drift and active-candidate drift refuse.
 
 `frutlups.receipt/2` replaces repeated `changed_files` with the same `manifest`
 reference. `witness` has exact fields `before,after,stable,head,index,product`:
 before/after are canonical complete snapshot hashes; head is the observed commit,
 index hashes staged entries/modes/flags, and product hashes raw file/type/mode
-identities excluding exact ledger/backlog, roadmap and bound evidence paths.
+identities excluding exact ledger/backlog, `roadmap.yaml`, derived
+`docs/roadmap.md` and bound evidence paths.
 Recorded artifact writes can follow verification without hiding product drift.
 The receipt also records portable runtime identity and observation mode. The rest of the `/1` receipt fields retain their
 meaning. `ok` requires successful execution and equal snapshots, including files
@@ -103,15 +115,24 @@ Completion is a Git commit with `Template-Operation: <id>`, exact parent, actual
 approved delta, matching blobs/modes and ledger prefix through approval. Unchanged
 eligible files need not appear in the delta. The trailer only locates a candidate.
 Validate historical witnesses from committed blobs, not today's worktree/index.
+Framework Git commands disable local replacement objects so pinned object IDs
+always name their original stored content; replacement refs are left untouched.
 Subsequent legitimate descendants do not invalidate earlier completion. Lookup is
 bounded and refuses missing history, duplicate witnesses and unexplained movement.
+Only fully validated witnesses count as duplicates; quoted trailers merely
+identify candidates. Each blob is limited to 64 MiB. Aggregate payload has no
+64 MiB ceiling: sizes are checked first and bytes fetched/hashed in batches
+bounded to 64 MiB plus 1 KiB of framing. Metadata capture is bounded to 8 MiB.
+Oversized individual blobs refuse.
 
 Pending intent freezes other ledger writes. Recovery first recognizes an existing
 witness, otherwise stages and commits only the pinned payload. No new approval,
 review, coder call or completion append occurs. Unrelated staged entries and
 content/index drift refuse without cleanup. An unresolved local Git dispatch
-marker requires explicit process attribution; a stale filename/PID proves no
-process has ended. `--git-resolved --reason ...` is human/architect attribution,
+marker requires explicit process attribution unless its exact completed witness
+is already proven; executable recovery can then archive the stale marker.
+A stale filename/PID alone proves no process has ended.
+`--git-resolved --reason ...` is mandatory human/architect attribution,
 not permission to kill a process.
 
 `commit_cancelled` has `operation,reason,retain_acceptance`, human/architect only,
@@ -129,6 +150,15 @@ policy, including adding/removing the hook; use cancellation and a new review.
 Completed historical witnesses retain their original policy. Choose scoped `-text` before hashing
 raw data. Generic projects need no hook. Historical raw evidence remains frozen;
 current derived output uses a project-owned scratch regeneration check instead.
+
+Framework binary hashing checks for NUL throughout the file. Git's automatic
+text classification is not a project raw-byte guarantee: declare scoped `-text`
+before hashing raw files, including mixed CRLF/NUL content, and verify the
+materialized Git bytes. Do not change a frozen manifest to hide a mismatch.
+With `core.filemode=false`, Git may not infer a new executable's mode. Set and
+stage its intended Git mode before verification/approval; recovery never changes
+the pinned mode to silence a mismatch. POSIX executable-mode qualification is
+still platform-dependent.
 
 ## Reviews, findings and checkpoints
 

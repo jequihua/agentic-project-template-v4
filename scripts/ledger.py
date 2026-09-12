@@ -356,7 +356,7 @@ def fold(events, rm):
 
 
 def append(path: c.Path, event, rm):
-    with c.writer_lock(path.resolve().parents[1]):
+    with c.command_scope(), c.writer_lock(path.resolve().parents[1]):
         return _append(path, event, rm)
 
 
@@ -726,9 +726,6 @@ def _record(root, value, args, rm, events, state):
     if rm["schema"] == protocol.ROADMAP:
         integrity.require_active(root, current, events, extra=(rel,))
         findings.validate_record(root, events, rel, c.sha(path), args.by, current)
-    waived = any(item["disposition"] == "waived_by_human" for item in review["findings"])
-    if (review["verdict"] == "override" or waived) and args.by != "human":
-        raise ValueError("override or waiver requires --by human")
     event = {
         "ev": "reviewed",
         "by": args.by,
@@ -870,7 +867,7 @@ def _save_json(root, sid, round_no, label, value):
     if path.exists():
         _need(c.sha(path) == digest, "immutable artifact collision")
     else:
-        c.atomic_text(path, text)
+        c.artifact_text(path, text)
     return {"path": rel, "sha": digest}
 
 
@@ -943,190 +940,196 @@ def _execute(args):
     root = args.root.resolve()
     ledger_path = root / "05_governance/ledger.jsonl"
     try:
-        rm = roadmap.load(root)
-        events = read(ledger_path)
-        state = fold(events, rm)
-        if args.command == "prompt":
-            roadmap.slice_by_id(rm, args.slice)
-            current = state["slices"][args.slice]
-            if current["step"] not in ("unstarted", "fix"):
-                raise ValueError(f"{args.slice} is {current['step']}, not ready for a prompt")
-            require_artifacts(root, events)
-            rel, path = _rel_file(root, args.path)
-            baseline = prompt_baseline(
-                root, rm, events, args.slice, args.allow_dirty, prospective=(rel,)
-            )
-            event = {
-                "ev": "prompt",
-                "by": args.by,
-                "slice": args.slice,
-                "round": current["round"],
-                "path": rel,
-                "sha": c.sha(path),
-            }
-            if baseline:
-                event["baseline"] = baseline
-            if rm["schema"] == protocol.ROADMAP:
-                import prompt
-
-                _, item = roadmap.slice_by_id(rm, args.slice)
-                envelope = prompt._envelope(root, rm, item, current)
-                event["envelope"] = _save_json(
-                    root, args.slice, current["round"], "envelope", envelope
+        with c.artifact_batch(root):
+            rm = roadmap.load(root)
+            events = read(ledger_path)
+            state = fold(events, rm)
+            if args.command == "prompt":
+                _need(
+                    rm["schema"] != protocol.ROADMAP,
+                    "saved-prompt registration is legacy /1 only; use prompt.py for /2",
                 )
-            append(ledger_path, event, rm)
-            print(f"{args.slice} r{current['round']} prompt -> {rel}")
-        elif args.command in ("coded", "blocked"):
-            _coded(root, args, rm, events, state, ledger_path)
-        elif args.command == "record":
-            _record(root, args.report, args, rm, events, state)
-        elif args.command == "accept":
-            current = state["slices"][args.slice]
-            if current["step"] != "accept_pending":
-                raise ValueError(f"{args.slice} is {current['step']}, not accept_pending")
-            require_artifacts(root, events)
-            require_product(root, current)
-            integrity.require_active(root, current, events)
-            _need(not args.commit or not args.commit_id, "choose --commit or --commit-id")
-            _need(
-                rm["schema"] != protocol.ROADMAP or not args.commit_id,
-                "/2 uses verified commit intents; --commit-id is legacy-only",
-            )
-            event = {
-                "ev": "accepted",
-                "by": args.by,
-                "slice": args.slice,
-                "round": current["round"],
-            }
-            if args.commit_id:
-                event["commit"] = args.commit_id
-            paths = _artifacts_for(root, events, args.slice)
-            _approve(
-                root,
-                event,
-                paths,
-                args.slice,
-                f"Accept {args.slice} round {current['round']}",
-                args.commit,
-                rm,
-            )
-        elif args.command in ("reopen", "unblock"):
-            _need(
-                args.command != "unblock" or rm["schema"] != protocol.ROADMAP,
-                "/2 blockers need resolve --reason --authority",
-            )
-            current = state["slices"][args.slice]
-            expected = "accepted" if args.command == "reopen" else "blocked"
-            if current["step"] != expected:
-                raise ValueError(f"{args.slice} is not {expected}")
-            event = {
-                "ev": "reopened" if args.command == "reopen" else "unblocked",
-                "by": args.by,
-                "slice": args.slice,
-                "round": current["round"] + 1,
-                "reason": args.reason,
-            }
-            append(ledger_path, event, rm)
-            print(f"{args.slice} {event['ev']} r{event['round']}")
-        elif args.command == "status":
-            print(status_text(rm, state))
-            if rm["schema"] == protocol.ROADMAP:
+                roadmap.slice_by_id(rm, args.slice)
+                current = state["slices"][args.slice]
+                if current["step"] not in ("unstarted", "fix"):
+                    raise ValueError(f"{args.slice} is {current['step']}, not ready for a prompt")
+                require_artifacts(root, events)
+                rel, path = _rel_file(root, args.path)
+                baseline = prompt_baseline(
+                    root, rm, events, args.slice, args.allow_dirty, prospective=(rel,)
+                )
+                event = {
+                    "ev": "prompt",
+                    "by": args.by,
+                    "slice": args.slice,
+                    "round": current["round"],
+                    "path": rel,
+                    "sha": c.sha(path),
+                }
+                if baseline:
+                    event["baseline"] = baseline
+                append(ledger_path, event, rm)
+                print(f"{args.slice} r{current['round']} prompt -> {rel}")
+            elif args.command in ("coded", "blocked"):
+                _coded(root, args, rm, events, state, ledger_path)
+            elif args.command == "record":
+                _record(root, args.report, args, rm, events, state)
+            elif args.command == "accept":
+                current = state["slices"][args.slice]
+                if current["step"] != "accept_pending":
+                    raise ValueError(f"{args.slice} is {current['step']}, not accept_pending")
+                require_artifacts(root, events)
+                require_product(root, current)
+                integrity.require_active(root, current, events)
+                _need(not args.commit or not args.commit_id, "choose --commit or --commit-id")
+                _need(
+                    rm["schema"] != protocol.ROADMAP or not args.commit_id,
+                    "/2 uses verified commit intents; --commit-id is legacy-only",
+                )
+                event = {
+                    "ev": "accepted",
+                    "by": args.by,
+                    "slice": args.slice,
+                    "round": current["round"],
+                }
+                if args.commit_id:
+                    event["commit"] = args.commit_id
+                paths = _artifacts_for(root, events, args.slice)
+                _approve(
+                    root,
+                    event,
+                    paths,
+                    args.slice,
+                    f"Accept {args.slice} round {current['round']}",
+                    args.commit,
+                    rm,
+                )
+            elif args.command in ("reopen", "unblock"):
+                _need(
+                    args.command != "unblock" or rm["schema"] != protocol.ROADMAP,
+                    "/2 blockers need resolve --reason --authority",
+                )
+                current = state["slices"][args.slice]
+                expected = "accepted" if args.command == "reopen" else "blocked"
+                if current["step"] != expected:
+                    raise ValueError(f"{args.slice} is not {expected}")
+                event = {
+                    "ev": "reopened" if args.command == "reopen" else "unblocked",
+                    "by": args.by,
+                    "slice": args.slice,
+                    "round": current["round"] + 1,
+                    "reason": args.reason,
+                }
+                append(ledger_path, event, rm)
+                print(f"{args.slice} {event['ev']} r{event['round']}")
+            elif args.command == "status":
+                print(status_text(rm, state))
+                if rm["schema"] == protocol.ROADMAP:
+                    import _commit
+
+                    for row in _commit.status(root, events, rm):
+                        print(f"commit {row['id']}: {row['state']}")
+                    for mid, item in state["holistic"].items():
+                        print(f"{mid} holistic: {item['step']}")
+                    for key, item in state["attempts"].items():
+                        if not item["finish"]:
+                            print(f"unresolved invocation: {key}")
+                    for milestone in rm["milestones"]:
+                        complete = all(
+                            state["slices"][x["id"]]["step"] == "accepted"
+                            for x in milestone["slices"]
+                        )
+                        complete = complete and (
+                            not milestone["holistic_review"]
+                            or milestone["id"] in state["milestones_done"]
+                        )
+                        if milestone["status"] == "done" and not complete:
+                            print(
+                                f"warning: {milestone['id']} declared done without ledger closure"
+                            )
+            elif args.command == "resolve":
+                require_artifacts(root, events)
+                append(
+                    ledger_path,
+                    {
+                        "ev": "resolved",
+                        "by": args.by,
+                        "scope": args.scope,
+                        "reason": args.reason,
+                        "authority": [_ref(root, x) for x in args.authority],
+                    },
+                    rm,
+                )
+                print(f"{args.scope} resolved")
+            elif args.command == "close":
+                _close(root, args.milestone, args.by, args.commit, rm, events, state)
+            elif args.command == "recover":
                 import _commit
 
-                for row in _commit.status(root, events, rm):
-                    print(f"commit {row['id']}: {row['state']}")
-                for mid, item in state["holistic"].items():
-                    print(f"{mid} holistic: {item['step']}")
-                for key, item in state["attempts"].items():
-                    if not item["finish"]:
-                        print(f"unresolved invocation: {key}")
-                for milestone in rm["milestones"]:
-                    complete = all(
-                        state["slices"][x["id"]]["step"] == "accepted" for x in milestone["slices"]
+                if args.git_resolved:
+                    _need(
+                        bool(args.reason and args.reason.strip()),
+                        "Git attribution requires --reason",
                     )
-                    complete = complete and (
-                        not milestone["holistic_review"]
-                        or milestone["id"] in state["milestones_done"]
-                    )
-                    if milestone["status"] == "done" and not complete:
-                        print(f"warning: {milestone['id']} declared done without ledger closure")
-        elif args.command == "resolve":
-            require_artifacts(root, events)
-            append(
-                ledger_path,
-                {
-                    "ev": "resolved",
-                    "by": args.by,
-                    "scope": args.scope,
-                    "reason": args.reason,
-                    "authority": [_ref(root, x) for x in args.authority],
-                },
-                rm,
-            )
-            print(f"{args.scope} resolved")
-        elif args.command == "close":
-            _close(root, args.milestone, args.by, args.commit, rm, events, state)
-        elif args.command == "recover":
-            import _commit
+                    _commit.resolve_inflight(root, args.git_resolved, args.reason, args.by)
+                print(json.dumps(_commit.recover(root, events, rm, args.execute), indent=2))
+            elif args.command == "cancel":
+                import _commit
 
-            if args.git_resolved:
-                _need(
-                    bool(args.reason and args.reason.strip()), "Git attribution requires --reason"
+                if args.git_resolved:
+                    _commit.resolve_inflight(root, args.operation, args.reason, args.by)
+                _commit.cancel_check(root, events, rm, args.operation)
+                append(
+                    ledger_path,
+                    {
+                        "ev": "commit_cancelled",
+                        "by": args.by,
+                        "operation": args.operation,
+                        "reason": args.reason,
+                        "retain_acceptance": args.retain_acceptance,
+                    },
+                    rm,
                 )
-                _commit.resolve_inflight(root, args.git_resolved, args.reason, args.by)
-            print(json.dumps(_commit.recover(root, events, rm, args.execute), indent=2))
-        elif args.command == "cancel":
-            import _commit
-
-            if args.git_resolved:
-                _commit.resolve_inflight(root, args.operation, args.reason, args.by)
-            _commit.cancel_check(root, events, rm, args.operation)
-            append(
-                ledger_path,
-                {
-                    "ev": "commit_cancelled",
-                    "by": args.by,
-                    "operation": args.operation,
-                    "reason": args.reason,
-                    "retain_acceptance": args.retain_acceptance,
-                },
-                rm,
-            )
-            print(f"commit {args.operation} cancelled; files and index preserved")
-        elif args.command == "attempt":
-            value = json.loads(_rel_file(root, args.event)[1].read_text(encoding="utf-8"))
-            _need(
-                value.get("ev") in ("attempt_started", "attempt_finished", "review_checkpoint"),
-                "attempt accepts only reservation, completion or review checkpoint",
-            )
-            require_artifacts(root, events)
-            append(ledger_path, value, rm)
-            print(value["ev"])
-        elif args.command == "reconcile":
-            require_artifacts(root, events)
-            for message in findings.reconcile(root, events):
-                print("warning: " + message)
-            print("backlog reconciled")
-        elif args.command == "index":
-            rows = ["| Slice | Round | Verdict | Report |", "| --- | ---: | --- | --- |"]
-            rows += [
-                f"| {event['slice']} | {event['round']} | {event['verdict']} | "
-                f"`{event['report']}` |"
-                for event in events
-                if event["ev"] == "reviewed"
-            ]
-            text = "# Review index\n\n" + "\n".join(rows) + "\n"
-            if args.output:
-                c.atomic_text(c.repo_path(root, c.cli_rel(args.output)), text)
+                print(f"commit {args.operation} cancelled; files and index preserved")
+            elif args.command == "attempt":
+                with _rel_file(root, args.event)[1].open("rb") as stream:
+                    data = stream.read(protocol.EVENT_LIMIT + 1)
+                _need(len(data) <= protocol.EVENT_LIMIT, "attempt event exceeds 2 MiB")
+                value = json.loads(data)
+                _need(
+                    isinstance(value, dict)
+                    and value.get("ev")
+                    in ("attempt_started", "attempt_finished", "review_checkpoint"),
+                    "attempt accepts only reservation, completion or review checkpoint",
+                )
+                require_artifacts(root, events)
+                append(ledger_path, value, rm)
+                print(value["ev"])
+            elif args.command == "reconcile":
+                require_artifacts(root, events)
+                for message in findings.reconcile(root, events):
+                    print("warning: " + message)
+                print("backlog reconciled")
+            elif args.command == "index":
+                rows = ["| Slice | Round | Verdict | Report |", "| --- | ---: | --- | --- |"]
+                rows += [
+                    f"| {event['slice']} | {event['round']} | {event['verdict']} | "
+                    f"`{event['report']}` |"
+                    for event in events
+                    if event["ev"] == "reviewed"
+                ]
+                text = "# Review index\n\n" + "\n".join(rows) + "\n"
+                if args.output:
+                    c.atomic_text(c.repo_path(root, c.cli_rel(args.output)), text)
+                else:
+                    print(text, end="")
             else:
-                print(text, end="")
-        else:
-            errors = check(root, rm, events)
-            if errors:
-                print("\n".join(f"error: {item}" for item in errors), file=sys.stderr)
-                return 2
-            print("ledger: ok")
-        return 0
+                errors = check(root, rm, events)
+                if errors:
+                    print("\n".join(f"error: {item}" for item in errors), file=sys.stderr)
+                    return 2
+                print("ledger: ok")
+            return 0
     except (KeyError, OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -1138,7 +1141,8 @@ def main(argv=None):
     readonly = args.command in ("status", "check") or args.command == "index" and not args.output
     readonly = readonly or args.command == "recover" and not args.execute and not args.git_resolved
     try:
-        with nullcontext() if readonly else c.writer_lock(root):
+        guard = nullcontext() if readonly else c.writer_lock(root)
+        with c.command_scope(), guard:
             if not readonly and args.command not in ("recover", "cancel"):
                 protocol.ensure_writable(root, allow_attempt=args.command == "attempt")
             return _execute(args)

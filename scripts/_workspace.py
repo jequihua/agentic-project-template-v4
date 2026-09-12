@@ -12,6 +12,7 @@ import tomllib
 from pathlib import Path
 
 import _common as c
+import _git as g
 
 
 def snapshot_digest(value):
@@ -52,15 +53,15 @@ def snapshot(root: Path):
     submodule-internal contents are outside this witness.
     """
     root = Path(root).resolve()
-    names = c.git(root, "ls-files", "--cached", "--others", "--exclude-standard", "-z").stdout
+    names = g.run(root, "ls-files", "--cached", "--others", "--exclude-standard", "-z").stdout
     files = {}
     for name in sorted(set(names.split(b"\0")) - {b""}):
         rel = os.fsdecode(name)
         c.safe_rel(rel)
         files[rel] = _identity(root, rel)
     return {
-        "head": c.git(root, "rev-parse", "HEAD", text=True).stdout.strip(),
-        "index": hashlib.sha256(c.git(root, "ls-files", "--stage", "-v", "-z").stdout).hexdigest(),
+        "head": g.run(root, "rev-parse", "HEAD", limit=1024).stdout.decode().strip(),
+        "index": hashlib.sha256(g.run(root, "ls-files", "--stage", "-v", "-z").stdout).hexdigest(),
         "files": files,
     }
 
@@ -81,8 +82,16 @@ def resolve_runtime(root: Path, rm=None):
     source = "invoking_python"
     if local.exists():
         if (
-            c.git(root, "check-ignore", "-q", "project.local.toml", check=False).returncode
-            or c.git(
+            # check-ignore accepts literal names but rejects pathspec magic.
+            g.run(
+                root,
+                "--no-literal-pathspecs",
+                "check-ignore",
+                "-q",
+                "project.local.toml",
+                check=False,
+            ).returncode
+            or g.run(
                 root, "ls-files", "--error-unmatch", "project.local.toml", check=False
             ).returncode
             == 0

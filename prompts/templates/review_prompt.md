@@ -59,6 +59,10 @@ Full:
 
 {{prior_findings}}
 
+## Memory
+
+{{memory}}
+
 ## Output
 
 Autonomous seats return the complete report for the runner to save. In manual

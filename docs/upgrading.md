@@ -1,9 +1,7 @@
 # Upgrading and operating the manual candidate
 
-This candidate introduces explicit `/2` contracts while keeping a small standalone
-manual loop. Python 3.11+, PyYAML and Git remain the only manual dependencies.
-Package numbering does not assert runner compatibility: an exact template/runner
-pair must pass the shared contract and interruption tests before autonomous use.
+Manual `/2` operation requires Python 3.11+, PyYAML and Git. Package numbering
+does not assert runner compatibility; the exact pair needs qualification.
 
 | Project and tools | Supported claim |
 | --- | --- |
@@ -15,15 +13,17 @@ pair must pass the shared contract and interruption tests before autonomous use.
 ## New projects
 
 Start from a reviewed export. Replace example brief/roadmap facts, prepare the
-project interpreter and configure the project-owned full verifier. Check and
-render the roadmap, then perform the ordinary prompt → coder → verification →
+project interpreter and configure the project-owned full verifier. From the
+extracted directory, run `python scripts/roadmap.py check`, then `git init`,
+`git add --all` and `git commit -m "Initialize project"` (configure your Git
+name/email if needed). Now run `python scripts/roadmap.py render` and perform
+the ordinary prompt → coder → verification →
 review → acceptance sequence. The empty shipped verifier fails intentionally.
 Use `docs/project_checks.md` only for the runtime, user-path, byte policy or
 research boundaries the project actually has.
 
-An archive made from `HEAD` contains committed files only. A maintainer's local
-candidate edits are not automatically included; select the reviewed candidate
-identity deliberately. Publication and installing a new runner are owner actions.
+`git archive HEAD` contains committed files only; select the reviewed candidate
+explicitly. Publication and runner installation remain owner actions.
 
 ## Existing projects
 
@@ -40,6 +40,9 @@ identity deliberately. Publication and installing a new runner are owner actions
    ledger, product code and custom prompt content. In particular, preserve the
    configured project-owned verifier and merge runtime support deliberately;
    never replace it with the scaffold's empty `COMMANDS` example.
+   Merge `.gitattributes` deliberately: preserve existing raw-byte `-text` scopes
+   and export exclusions. Inspect existing manifests before changing line-ending
+   policy; do not rehash frozen raw evidence to make an upgrade pass.
 4. Install the dual readers first. Check the existing `/1` project and history
    without enabling `/2` output. Review custom templates against the full new
    acceptance-envelope placeholders and use actual preview to expose omissions.
@@ -58,55 +61,67 @@ There is no automatic migration service. Reverting scripts or editing `/2` back
 to `/1` after new events were written cannot undo a protocol upgrade safely.
 Inspect and recover the real recorded state instead.
 
-## Only the exceptional boundaries add commands
+Legacy reports keep their `/1` meaning. A same-scope legacy finding re-listed in
+a later report updates its original projected disposition; the source remains
+the first report path/hash/ID. The reader diagnoses old cross-scope ID collisions
+and architect holistic waivers without retroactively rejecting that accepted
+history. `/2` reports require explicit source-bound updates and human-only
+waivers. Never edit a legacy review or ledger to satisfy a new rule. Non-Git
+standalone `/1` ledger/render APIs retain their old carve-out; `/2` writers,
+including derived roadmap rendering, require the shared Git lock.
 
-Ordinary `coded <slice>` means implemented work, including a valid zero-change
-result. Optional `--notes <path>` binds the saved manual handoff. For a typed
-blocker, the architect supplies `coded <slice> --result blocked_authority`
-or `blocked_environment` with `--outcome <saved-outcome.json>` and retained notes.
-The outcome grammar is in `docs/contracts.md`; a blocker preserves edits and
-stops before automatic verification. Human/architect resumption uses:
+## Exceptional commands
+
+Ordinary `coded <slice>` means implemented work, including zero changes;
+`--notes <path>` optionally binds the manual handoff. Preserve blocked edits.
+For a short manual blocker, avoid hand-authoring JSON:
+
+```powershell
+python scripts/ledger.py blocked M001-S01 --requirement "acceptance 1" --reason "Allowance absent" --actor human --action "Record allowance"
+```
+
+Use `--result blocked_environment` for an environment blocker. Repeatable
+`--remaining`, `--evidence` and `--authority` identify actions, evidence files
+and relative decision/budget paths. `--outcome <file.json>` supplies a saved
+outcome instead; exact grammar is in [contracts](contracts.md). A blocker stops
+before verification. Human/architect resumption uses:
 
 ```text
 python scripts/ledger.py resolve M001-S01 --reason "authority now recorded" --authority 00_brief/decisions.md
 ```
 
-The same verb resolves a blocked milestone scope. It records the changed fact
-without silently granting model or scientific attempts. Legacy `/1` reviewer
-blocks continue to use `unblock <slice> --reason ...`.
+The same verb resolves a blocked milestone. It preserves the original frozen
+acceptance and grants no undeclared budget. Materially changed scope belongs in
+a new slice. Legacy `/1` reviewer blocks retain `unblock <slice> --reason ...`.
 
-`accept <slice>` remains ledger-only. If the original acceptance requested
-`--commit`, approval and intent are durable before Git completion. Diagnose with
-`ledger.py recover`; resume only missing exact work with `recover --execute`.
-The recovery command first checks for an already-created witness, so an observed
-successful commit does not cause another acceptance or a dirty completion append.
-If Git ownership is unknown after interruption, explicit
-`recover --git-resolved <operation> --reason ...` attributes that state; never assume a stale PID or
-released writer lock proves the child ended.
+`accept <slice>` is ledger-only. Inspect and manually commit accepted products
+and loop evidence before the next slice. If the original approval requested
+`--commit`, use `ledger.py recover` to diagnose, then `recover --execute` to
+complete only missing exact Git work. Never repeat approval. An exact completed
+witness permits executable recovery to archive its stale marker automatically.
+A stale filename/PID alone is insufficient.
 
-An unfinishable pending intent can be cancelled using
-`ledger.py cancel <operation> --reason ... --by human|architect`, after any Git
-action is resolved. Only human may add `--retain-acceptance` to explicitly keep
-ledger-only approval; otherwise the scope reopens for new verification/review.
-Cancellation preserves old evidence, user files and the index. It authorizes no
-cleanup and never approves changed payload automatically.
+For unresolved Git ownership, first establish that the owned process ended,
+then use `recover --git-resolved <operation> --reason ... --by human|architect`.
+An unfinishable intent uses `cancel <operation> --reason ... --by human|architect`;
+add `--git-resolved` to combine explicit process attribution with cancellation.
+Only human may add `--retain-acceptance` to keep ledger-only approval; otherwise
+the scope reopens. Cancellation preserves evidence, files and index and grants
+no cleanup authority. Unknown model/probe reservations use the separate
+[`ledger.py attempt` examples](operating.md#recovery).
 
-Record a holistic report with `record <report> --milestone M001`. A `/2` pass
-persists a close-pending decision; `close M001` completes ledger-only closure,
-optionally with `--commit` when authorized. A blocked holistic decision requires
-resolution; needs-work reopens only the report's affected slices. Manual selection
-of another admitted active slice remains deliberate architect authority.
+Record holistic reports with `record <report> --milestone M001`. A `/2` pass
+persists `close_pending`; `close M001` completes closure, optionally with an
+authorized `--commit`. Blocked requires resolution; needs-work reopens affected
+slices. Manual selection of another active slice remains architect authority.
 
-If generated backlog output is interrupted or stale, `ledger.py reconcile`
-rebuilds its marked region from explicit report-bound finding updates. Preserve
-architect prose outside it. Passing reviews do not implicitly close old findings,
-and only a human can waive a finding in slice or holistic recording.
+`ledger.py reconcile` rebuilds only the backlog's marked region. Preserve
+outside prose. `/2` closures are explicit and source-bound; only human may waive
+findings. See [operating](operating.md) for the ordinary loop and crash recovery.
 
 ## Qualification handoff
 
-Keep the tested candidate identity, toolchain, elapsed results and limitations
-with the maintenance report. Local manual verification and synthetic Git/process
-fault tests do not establish real model adapter behavior. T40/F40 mode switching,
-unresolved autonomous invocation/budget behavior and the exact-pair F41 live canary
-remain paired gates. No host-wide process cleanup, real experiment rerun, paid
-model invocation or publication is implied by this upgrade procedure.
+Record the tested identity, toolchain, results and limitations. Local synthetic
+tests do not qualify model adapters, T40/F40 mode switching, autonomous budgets
+or F41's paired live canary. Upgrading authorizes no host cleanup, experiment
+rerun, paid invocation or publication.

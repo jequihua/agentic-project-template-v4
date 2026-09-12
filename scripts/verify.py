@@ -20,7 +20,7 @@ import roadmap
 
 _LAST_COMPONENT = r"(?:[^\\/\r\n<>\"'`]*?\.[a-z0-9]{1,12}(?=\s|[):,;]|$)|[^\s<>\"'`\\/]+)"
 ABSOLUTE_PATH = re.compile(
-    r"(?i)(?<![\w:/])(?:"
+    r"(?i)(?<![\w:/.])(?:"
     r"[a-z]:[\\/](?:[^\\/\r\n<>\"'`]+[\\/])*"
     r"|\\\\(?:[^\\/\r\n<>\"'`]+[\\/])+"
     r"|/(?!/)(?=[a-z0-9_.~])(?:[^\\/\r\n<>\"'`]+[\\/])+"
@@ -28,7 +28,7 @@ ABSOLUTE_PATH = re.compile(
 )
 QUOTED_PATH = re.compile(r"([\"'`])((?:[a-zA-Z]:[\\/]|/(?!/)|\\\\|file://)[^\r\n]*?)\1")
 FILE_URL = re.compile(r"\bfile://[^\r\n<>\"'`]+", re.IGNORECASE)
-URL = re.compile(r"https?://[^\s<>\"'`]+")
+PROTECTED = re.compile(r"https?://[^\s<>\"'`]+|(?<!\w)r?([\"'])\^[^\r\n]*?\$\1")
 
 
 def _tail(value: bytes) -> str:
@@ -51,20 +51,21 @@ def _scrub(value: bytes, root: Path, env: dict[str, str]) -> str:
                     text = text.replace(line, "<redacted>")
     # URLs and relative Markdown references remain readable. Quoting lets us
     # recognize paths containing spaces without treating a standalone slash as one.
-    pieces = URL.split(text)
-    urls = URL.findall(text)
-    for number, piece in enumerate(pieces):
-        piece = QUOTED_PATH.sub(
-            lambda match: (
-                (match[1] + "<absolute-path>" + match[1]) if len(match[2]) > 1 else match[0]
-            ),
-            piece,
-        )
-        piece = FILE_URL.sub("<absolute-path>", piece)
-        pieces[number] = ABSOLUTE_PATH.sub("<absolute-path>", piece)
-    text = "".join(
-        piece + (urls[number] if number < len(urls) else "") for number, piece in enumerate(pieces)
+    protected = []
+
+    def protect(match):
+        protected.append(match[0])
+        return f"\x00protected{len(protected) - 1}\x00"
+
+    text = PROTECTED.sub(protect, text)
+    text = QUOTED_PATH.sub(
+        lambda match: (match[1] + "<absolute-path>" + match[1]) if len(match[2]) > 1 else match[0],
+        text,
     )
+    text = FILE_URL.sub("<absolute-path>", text)
+    text = ABSOLUTE_PATH.sub("<absolute-path>", text)
+    for number, original in enumerate(protected):
+        text = text.replace(f"\x00protected{number}\x00", original)
     return _tail(text.encode("utf-8"))
 
 

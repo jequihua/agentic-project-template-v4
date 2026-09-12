@@ -100,6 +100,11 @@ a declared retry allowance; an unresolved prior invocation blocks new work.
 A retry does not consume a corrective round. Review later rounds against open findings, the delta,
 and evidence invalidated by that delta.
 
+After a blocker is resolved, the next round preserves its original frozen
+acceptance envelope. Ordinary needs-work rounds read the admitted roadmap when
+issued. Material respecification after a blocker belongs in a new slice; editing
+roadmap acceptance cannot replace the blocked round's original contract.
+
 An accepted slice may be reopened only by a human or architect record with a
 reason. Append `reopened` at the next round; never edit the earlier pass or
 acceptance.
@@ -125,12 +130,19 @@ not completion.
 
 ## Commits
 
-Coders never commit unless the owner explicitly changes that rule. The normal
-commit boundary is an accepted slice. `ledger.py accept --commit` appends the
-accepted event, stages only the accepted slice and its loop evidence, and makes
-`Accept M001-S01 round 2`; it never pushes. The event omits its own commit hash
-to avoid circular identity and the command prints the resulting hash. A known
-external/manual acceptance commit may be recorded in the optional field.
+Coders never commit unless the owner explicitly changes that rule. In `/2`,
+`ledger.py accept <slice>` records ledger-only approval. With authorized
+`--commit`, that same append binds the exact payload, parent and operation intent.
+Other writes freeze until Git completion or attributed cancellation. A commit
+proves completion through its validated `Template-Operation:` witness; no second
+approval or completion append dirties the ledger. Interrupted work uses
+`ledger.py recover`, then `recover --execute` for only its missing Git work.
+Neither command pushes. `--commit-id` is legacy `/1` attribution only.
+
+Ledger-only acceptance requires inspected manual housekeeping commits before a
+new slice starts. Owner hotfixes committed after acceptance may match HEAD for
+holistic review/close; they do not change what the earlier review approved.
+Active review and acceptance remain pinned to the exact verified candidate.
 
 Before committing, require passing verification and review, inspect status,
 exclude secrets/local state, and inspect the exact staged paths. Pull requests,

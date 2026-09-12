@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
+import re
 import subprocess
 from pathlib import Path
 
 import _common as c
 
-
+BLOB_LIMIT = 64 * 1024 * 1024
+OID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 ARGV_LIMIT = 12 * 1024
 OUTPUT_LIMIT = 8 * 1024 * 1024
 DIFF_NOTICE = "\n[diff truncated; complete manifest remains authoritative]\n"
@@ -18,7 +21,15 @@ def run(root, *args, input=None, limit=OUTPUT_LIMIT, truncate=False, check=True)
     """Drain bounded command output; Git metadata overflow always fails closed."""
     import _process
 
-    argv = ["git", "--literal-pathspecs", "-C", str(root), *args]
+    argv = [
+        "git",
+        "--no-replace-objects",
+        "--no-optional-locks",
+        "--literal-pathspecs",
+        "-C",
+        str(root),
+        *args,
+    ]
     encoded = subprocess.list2cmdline(argv).encode("utf-16-le" if os.name == "nt" else "utf-8")
     if len(encoded) > ARGV_LIMIT:
         raise ValueError("Git command exceeds the bounded argument allowance")
@@ -38,6 +49,79 @@ def run(root, *args, input=None, limit=OUTPUT_LIMIT, truncate=False, check=True)
     if not truncate and (result.stdout_bytes > limit or result.stderr_bytes > limit):
         raise ValueError("Git output exceeds the bounded metadata allowance")
     return result
+
+
+def read_blobs(root, objects):
+    """Yield complete blobs from size-checked batches, never aggregate the payload."""
+    objects = list(dict.fromkeys(objects))
+    if not objects:
+        return
+    if any(not OID.fullmatch(oid) for oid in objects):
+        raise ValueError("invalid Git blob identity")
+    framing = 1024
+    metadata = run(
+        root,
+        "cat-file",
+        "--batch-check",
+        input="".join(o + "\n" for o in objects).encode(),
+    ).stdout.splitlines()
+    if len(metadata) != len(objects):
+        raise ValueError("incomplete Git blob metadata")
+    batches, batch, used = [], [], 0
+    for oid, line in zip(objects, metadata):
+        header = line.decode("ascii").split()
+        if len(header) != 3 or header[0] != oid or header[1] != "blob":
+            raise ValueError("commit content is not an available blob")
+        size = int(header[2])
+        if not 0 <= size <= BLOB_LIMIT:
+            raise ValueError("Git blob exceeds the 64 MiB per-file allowance")
+        cost = len(line) + size + 2
+        if batch and used + cost > BLOB_LIMIT + framing:
+            batches.append(batch)
+            batch, used = [], 0
+        batch.append((oid, size, line))
+        used += cost
+    if batch:
+        batches.append(batch)
+    for batch in batches:
+        data = run(
+            root,
+            "cat-file",
+            "--batch",
+            input="".join(oid + "\n" for oid, _, _ in batch).encode(),
+            limit=BLOB_LIMIT + framing,
+        ).stdout
+        offset = 0
+        for oid, size, header in batch:
+            start = offset + len(header) + 1
+            end = start + size
+            if data[offset:start] != header + b"\n" or data[end : end + 1] != b"\n":
+                raise ValueError("incomplete Git blob evidence")
+            yield oid, data[start:end]
+            offset = end + 1
+        if offset != len(data):
+            raise ValueError("unexpected Git blob evidence")
+        del data
+
+
+def blob_hashes(root, objects):
+    cache = c.cache("commit_blob_hashes")
+    namespace = str(Path(root).resolve())
+    objects = list(dict.fromkeys(objects))
+    output = {
+        oid: cache[namespace, oid]
+        for oid in objects
+        if cache is not None and (namespace, oid) in cache
+    }
+    for oid, data in read_blobs(root, [oid for oid in objects if oid not in output]):
+        output[oid] = {
+            "raw": hashlib.sha256(data).hexdigest(),
+            "normalized": c.evidence_sha_bytes(data),
+        }
+        if cache is not None and len(cache) < 100_000:
+            cache[namespace, oid] = output[oid]
+        del data
+    return output
 
 
 def paths_checked(paths):

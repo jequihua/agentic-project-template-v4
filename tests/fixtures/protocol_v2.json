@@ -594,6 +594,124 @@
           "retain_acceptance": true
         }
       ]
+    },
+    {
+      "name": "holistic-disabled-reader-refusal",
+      "valid": false,
+      "holistic_review": false,
+      "events": [
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "prompt",
+          "path": "prompt.md",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "coded",
+          "changed": []
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "verified",
+          "receipt": "receipt.json",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "ok": true
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "reviewed",
+          "report": "review.md",
+          "sha": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "verdict": "pass",
+          "open": []
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "accepted"
+        },
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "holistic_reviewed",
+          "milestone": "M001",
+          "report": "holistic.md",
+          "sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "verdict": "blocked",
+          "open": [
+            "M001-S01-P2"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "v2-unbound-unblocked-refusal",
+      "valid": false,
+      "events": [
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "unblocked",
+          "slice": "M001-S01",
+          "round": 2,
+          "reason": "No bound authority"
+        }
+      ]
+    },
+    {
+      "name": "unknown-ledger-v3",
+      "valid": false,
+      "events": [
+        {
+          "schema": "frutlups.ledger/3",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "note",
+          "text": "Future schema"
+        }
+      ]
+    },
+    {
+      "name": "noncanonical-v2-extension-timestamp",
+      "valid": false,
+      "events": [
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "20260912T000000Z",
+          "by": "architect",
+          "ev": "resolved",
+          "scope": "M001-S01",
+          "reason": "Invalid timestamp",
+          "authority": [
+            {
+              "path": "decision.md",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ]
+        }
+      ]
     }
   ],
   "finding_update": {
@@ -635,5 +753,165 @@
       },
       "git_boundary": null
     }
-  }
+  },
+  "legacy_findings": [
+    {
+      "name": "legacy-architect-waiver",
+      "reports": [
+        {
+          "path": "05_governance/reviews/waiver.md",
+          "sha": "7eb774ef81b48813cf418db13c90c024e8f4ca7903326fff21fc438cc92b06b2",
+          "text": "# Review: M001 round holistic\n\n## Findings\n| id | severity | disposition | summary |\n| --- | --- | --- | --- |\n| M001-S01-W1 | P2 | waived_by_human | Recorded finding |\n\n## Closure Decision\nObjective status: achieved\nObjective evidence: The receipt passed and the expected file exists.\n\n## Verdict\nVerdict: pass - next: accept the slice\n"
+        }
+      ],
+      "events": [
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "artifact",
+          "scope": "M001",
+          "round": "holistic",
+          "role": "holistic_report",
+          "path": "05_governance/reviews/waiver.md",
+          "sha": "7eb774ef81b48813cf418db13c90c024e8f4ca7903326fff21fc438cc92b06b2"
+        }
+      ],
+      "expected": [
+        {
+          "source": {
+            "path": "05_governance/reviews/waiver.md",
+            "sha": "7eb774ef81b48813cf418db13c90c024e8f4ca7903326fff21fc438cc92b06b2"
+          },
+          "id": "M001-S01-W1",
+          "owner": "M001",
+          "disposition": "waived_by_human",
+          "last_report": "05_governance/reviews/waiver.md"
+        }
+      ],
+      "diagnostic": "Legacy waiver actor preserved"
+    },
+    {
+      "name": "legacy-same-scope-relist-closure",
+      "reports": [
+        {
+          "path": "05_governance/reviews/first.md",
+          "sha": "972407208e033095845d05ef8c13fa07071cde1f469f3dc0fa1122da3a69e4a5",
+          "text": "# Review: M001-S01 round 1\n\n## Findings\n| id | severity | disposition | summary |\n| --- | --- | --- | --- |\n| F1 | P2 | open | Recorded finding |\n\n## Closure Decision\nObjective status: not_achieved\nObjective evidence: The receipt passed and the expected file exists.\n\n## Verdict\nVerdict: needs_work - next: accept the slice\n"
+        },
+        {
+          "path": "05_governance/reviews/closed.md",
+          "sha": "e0ced64aac069dc9497856b3d4f1409ddf607f1ba164a841a2828b4a6b75a114",
+          "text": "# Review: M001-S01 round 2\n\n## Findings\n| id | severity | disposition | summary |\n| --- | --- | --- | --- |\n| F1 | P2 | closed_by_review | Recorded finding |\n\n## Closure Decision\nObjective status: achieved\nObjective evidence: The receipt passed and the expected file exists.\n\n## Verdict\nVerdict: pass - next: accept the slice\n"
+        }
+      ],
+      "events": [
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "reviewed",
+          "slice": "M001-S01",
+          "round": 1,
+          "report": "05_governance/reviews/first.md",
+          "sha": "972407208e033095845d05ef8c13fa07071cde1f469f3dc0fa1122da3a69e4a5",
+          "verdict": "needs_work",
+          "open": [
+            "F1"
+          ]
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "reviewed",
+          "slice": "M001-S01",
+          "round": 2,
+          "report": "05_governance/reviews/closed.md",
+          "sha": "e0ced64aac069dc9497856b3d4f1409ddf607f1ba164a841a2828b4a6b75a114",
+          "verdict": "pass",
+          "open": []
+        }
+      ],
+      "expected": [
+        {
+          "source": {
+            "path": "05_governance/reviews/first.md",
+            "sha": "972407208e033095845d05ef8c13fa07071cde1f469f3dc0fa1122da3a69e4a5"
+          },
+          "id": "F1",
+          "owner": "M001-S01",
+          "disposition": "closed_by_review",
+          "last_report": "05_governance/reviews/closed.md"
+        }
+      ],
+      "diagnostic": "Legacy re-list"
+    },
+    {
+      "name": "legacy-cross-scope-relist-does-not-close",
+      "reports": [
+        {
+          "path": "05_governance/reviews/first.md",
+          "sha": "972407208e033095845d05ef8c13fa07071cde1f469f3dc0fa1122da3a69e4a5",
+          "text": "# Review: M001-S01 round 1\n\n## Findings\n| id | severity | disposition | summary |\n| --- | --- | --- | --- |\n| F1 | P2 | open | Recorded finding |\n\n## Closure Decision\nObjective status: not_achieved\nObjective evidence: The receipt passed and the expected file exists.\n\n## Verdict\nVerdict: needs_work - next: accept the slice\n"
+        },
+        {
+          "path": "05_governance/reviews/other.md",
+          "sha": "9f210585a0ee706edb6ef840951a374e842439a5d89d6fb13e06aa984cf7922a",
+          "text": "# Review: M001-S02 round 2\n\n## Findings\n| id | severity | disposition | summary |\n| --- | --- | --- | --- |\n| F1 | P2 | closed_by_review | Recorded finding |\n\n## Closure Decision\nObjective status: achieved\nObjective evidence: The receipt passed and the expected file exists.\n\n## Verdict\nVerdict: pass - next: accept the slice\n"
+        }
+      ],
+      "events": [
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "reviewed",
+          "slice": "M001-S01",
+          "round": 1,
+          "report": "05_governance/reviews/first.md",
+          "sha": "972407208e033095845d05ef8c13fa07071cde1f469f3dc0fa1122da3a69e4a5",
+          "verdict": "needs_work",
+          "open": [
+            "F1"
+          ]
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "reviewed",
+          "slice": "M001-S02",
+          "round": 2,
+          "report": "05_governance/reviews/other.md",
+          "sha": "9f210585a0ee706edb6ef840951a374e842439a5d89d6fb13e06aa984cf7922a",
+          "verdict": "pass",
+          "open": []
+        }
+      ],
+      "expected": [
+        {
+          "source": {
+            "path": "05_governance/reviews/first.md",
+            "sha": "972407208e033095845d05ef8c13fa07071cde1f469f3dc0fa1122da3a69e4a5"
+          },
+          "id": "F1",
+          "owner": "M001-S01",
+          "disposition": "open",
+          "last_report": "05_governance/reviews/first.md"
+        },
+        {
+          "source": {
+            "path": "05_governance/reviews/other.md",
+            "sha": "9f210585a0ee706edb6ef840951a374e842439a5d89d6fb13e06aa984cf7922a"
+          },
+          "id": "F1",
+          "owner": "M001-S02",
+          "disposition": "closed_by_review",
+          "last_report": "05_governance/reviews/other.md"
+        }
+      ],
+      "diagnostic": "Legacy cross-scope duplicate"
+    }
+  ]
 }

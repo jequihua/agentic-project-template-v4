@@ -66,9 +66,9 @@ prevention, accessibility, explicit human requirements, or needed tests.
   approach, then exactly four lists: changed files; commands run with pass or
   fail; what could not be verified; deviations from the prompt. State observed
   facts, not a verdict on your own work.
-- Preserve blocked work; state the requirement, evidence, remaining work and
-  required actor/action. Manual four-list handoffs suffice; the architect records
-  typed blockers. Use structured outcomes only when the prompt requires them.
+- Preserve blocked work; put requirement/evidence and remaining actor/action in
+  the unverified/deviations lists. The architect records typed blockers. Use
+  structured outcomes only when the prompt requires them.
   Formatting repair cannot repeat writable work or experiments.
 
 ## Reviewer

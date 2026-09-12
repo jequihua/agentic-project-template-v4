@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 
 import _common as c
 
 SCHEMA = "frutlups.ledger/2"
+EVENT_LIMIT = 2 * 1024 * 1024
 ROADMAP = "frutlups.roadmap/2"
 RESULTS = {"implemented", "blocked_authority", "blocked_environment"}
 EXTRA = {
@@ -68,15 +71,18 @@ def references(values):
 
 
 def validate(event, legacy_validate):
-    need(len(json.dumps(event).encode()) <= 2 * 1024 * 1024, "ledger event exceeds 2 MiB")
+    need(event.get("schema") == SCHEMA, "unknown ledger schema")
+    need(len(json.dumps(event).encode()) <= EVENT_LIMIT, "ledger event exceeds 2 MiB")
     ev = event.get("ev")
     need(isinstance(ev, str), "event name must be text")
     need(event.get("by") in ("human", "architect", "frutlups"), "invalid actor")
     need(isinstance(event.get("t"), str), "invalid timestamp")
-    from datetime import datetime
-
-    need(event["t"].endswith("Z"), "timestamp must be UTC")
+    need(
+        bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", event["t"])),
+        "timestamp must be canonical UTC seconds",
+    )
     datetime.fromisoformat(event["t"].replace("Z", "+00:00"))
+    need(ev != "unblocked", "/2 resolution requires an authority-bound resolved event")
     if ev in FIELDS:
         keys = set(event) - {"schema", "t", "ev", "by"}
         required = FIELDS[ev] - OPTIONAL.get(ev, set())
@@ -216,9 +222,23 @@ def read_reference(root, ref, limit=2 * 1024 * 1024):
     reference(ref)
     path = c.repo_path(root, ref["path"])
     need(path.is_file() and not path.is_symlink(), f"missing regular evidence: {ref['path']}")
-    need(c.sha(path) == ref["sha"], f"immutable evidence drift: {ref['path']}")
+    identity = c.file_key(path)
+    key = (identity, ref["sha"], limit)
+    memo = c.cache("json_evidence")
     need(path.stat().st_size <= limit, f"evidence exceeds read bound: {ref['path']}")
-    return json.loads(path.read_text(encoding="utf-8"))
+    with path.open("rb") as stream:
+        data = stream.read(limit + 1)
+    need(len(data) <= limit, f"evidence exceeds read bound: {ref['path']}")
+    need(c.evidence_sha_bytes(data) == ref["sha"], f"immutable evidence drift: {ref['path']}")
+    need(c.file_key(path) == identity, f"evidence changed while reading: {ref['path']}")
+    # Metadata can remain identical after a rapid same-size rewrite. Reuse only
+    # parsing, after proving the current bytes still match the bound identity.
+    if memo is not None and key in memo:
+        return copy.deepcopy(memo[key])
+    value = json.loads(data.decode("utf-8"))
+    if memo is not None:
+        c.remember("json_evidence", key, copy.deepcopy(value), len(data))
+    return value
 
 
 def outcome(root, ref, sid, round_no):
@@ -310,6 +330,10 @@ def event_references(event):
 def apply(event, states, milestones, done, extras):
     """Apply only new transitions; return whether the legacy fold should skip it."""
     ev = event["ev"]
+    need(
+        event.get("schema") != SCHEMA or ev != "unblocked",
+        "/2 resolution requires an authority-bound resolved event",
+    )
     attempts = extras["attempts"]
     holistic = extras["holistic"]
     if ev == "attempt_started":
@@ -370,6 +394,7 @@ def apply(event, states, milestones, done, extras):
     if ev == "holistic_reviewed":
         mid = event["milestone"]
         need(mid in milestones, "unknown holistic milestone")
+        need(milestones[mid]["holistic_review"], "milestone does not require holistic review")
         need(
             mid not in done
             and all(states[x["id"]]["step"] == "accepted" for x in milestones[mid]["slices"]),
@@ -465,8 +490,25 @@ def ensure_writable(root, rm=None, *, allow_attempt=False, cancellation=False):
     import roadmap
 
     rm = rm or roadmap.load(root)
-    events = ledger.read(Path(root) / "05_governance/ledger.jsonl")
-    state = ledger.fold(events, rm)
+    path = Path(root) / "05_governance/ledger.jsonl"
+    memo = c.cache("write_admission")
+    ledger_sha = c.sha(path) if path.exists() else None
+    key = (
+        c.file_key(path),
+        ledger_sha,
+        json.dumps(rm, sort_keys=True),
+        allow_attempt,
+        cancellation,
+    )
+    if memo is not None and key in memo:
+        events, state = memo[key]
+    else:
+        events = ledger.read(path)
+        state = ledger.fold(events, rm)
+        if memo is not None:
+            memo[key] = events, state
+    # Git refs are mutable even when the ledger and worktree are unchanged.
+    # Reuse immutable payload proofs, but always refresh witness discovery.
     if not cancellation and any(event.get("commit_intent") for event in events):
         import _commit
 

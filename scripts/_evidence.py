@@ -8,18 +8,20 @@ from pathlib import Path
 
 import _common as c
 
-
 DIFF_LIMIT = 32 * 1024
 HOLISTIC_STAT_LIMIT = 4 * 1024
 HOLISTIC_PATH_LIMIT = 64
 
 
-def bounded_text(text, rel, limit=4096):
+def bounded_text(text, rel, limit=4096, *, digest=None):
     raw = text.encode("utf-8")
     if len(raw) <= limit:
         return text
+    if not digest:
+        raise ValueError("truncated artifact requires its complete SHA-256: " + rel)
     clipped = raw[:limit].decode("utf-8", "ignore")
-    return clipped + f"\n\n[Embedded text truncated; read the full artifact at `{rel}`.]"
+    reference = f"`{rel}` (sha256 `{digest}`)"
+    return clipped + f"\n\n[Embedded text truncated; read the full artifact at {reference}.]"
 
 
 def read_excerpt(root, rel, limit=4096):
@@ -29,7 +31,13 @@ def read_excerpt(root, rel, limit=4096):
         raise ValueError(f"not a regular repository file: {rel}")
     with path.open("rb") as stream:
         raw = stream.read(limit + 1)
-    return bounded_text(raw.decode("utf-8", "replace"), rel, limit)
+    text = raw.decode("utf-8", "replace")
+    return bounded_text(
+        text,
+        rel,
+        limit,
+        digest=c.sha(path) if len(text.encode("utf-8")) > limit else None,
+    )
 
 
 def _visible_lines(text):
@@ -176,7 +184,9 @@ def changed_files(root):
         if path.is_symlink():
             raise ValueError(f"changed path is a symlink: {rel}")
         if kind == "deleted":
-            digest = c.evidence_sha_bytes(c.git(root, "show", f"HEAD:{rel}").stdout)
+            digest = head_sha(root, rel)
+            if digest is None:
+                raise ValueError("deleted path has no HEAD blob: " + rel)
         elif path.is_file():
             digest = c.sha(path)
         else:
@@ -187,8 +197,14 @@ def changed_files(root):
 
 def head_sha(root, rel):
     """Return a path's normalized HEAD blob hash, or None when HEAD lacks it."""
-    result = c.git(root, "show", f"HEAD:{rel}", check=False)
-    return c.evidence_sha_bytes(result.stdout) if result.returncode == 0 else None
+    import _git as gitops
+
+    rel = c.safe_rel(rel)
+    result = gitops.run(root, "rev-parse", "--verify", f"HEAD:{rel}", limit=1024, check=False)
+    if result.returncode:
+        return None
+    oid = result.stdout.decode("ascii").strip()
+    return gitops.blob_hashes(root, [oid])[oid]["normalized"]
 
 
 def matches_head(root, rel):
@@ -205,7 +221,7 @@ def matches_head(root, rel):
 def _known_baseline_paths(events, sid):
     import _protocol as protocol
 
-    paths = {"05_governance/ledger.jsonl", "05_governance/backlog.md"}
+    paths = {"05_governance/ledger.jsonl", "05_governance/backlog.md", "docs/roadmap.md"}
     milestone = sid.split("-")[0]
     for index, event in enumerate(events):
         belongs = event.get("slice") == sid or event.get("scope") == sid
@@ -287,18 +303,33 @@ def diff_block(text, paths, limit=DIFF_LIMIT):
 
 def selected_changes(changed):
     """Prioritize source/config/tests before selecting a bounded evidence window."""
-    source = {".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".sh"}
+    source = {
+        ".py",
+        ".js",
+        ".ts",
+        ".tsx",
+        ".jsx",
+        ".go",
+        ".rs",
+        ".java",
+        ".sh",
+        ".c",
+        ".h",
+        ".cpp",
+        ".hpp",
+        ".sql",
+    }
     config = {".toml", ".yaml", ".yml", ".json", ".ini", ".cfg", ".md", ".css", ".html"}
 
     def priority(item):
         path = item["path"]
         suffix = Path(path).suffix.lower()
         generated = any(
-            part in path.lower().split("/")
-            for part in ("generated", "artifacts", "outputs", "fixtures", "data")
+            re.sub(r"^\d+_", "", part) in ("generated", "artifacts", "outputs", "fixtures", "data")
+            for part in path.lower().split("/")[:-1]
         )
         rank = 0 if suffix in source else 1 if suffix in config else 2
-        return (3 if generated else rank, path)
+        return (3 if generated and rank else rank, path)
 
     return sorted(changed, key=priority)[:HOLISTIC_PATH_LIMIT]
 
@@ -350,24 +381,45 @@ def holistic_diff(root, base, paths_by_slice, limit=DIFF_LIMIT):
     all_paths = list(dict.fromkeys(path for paths in paths_by_slice.values() for path in paths))
     selected = [item["path"] for item in selected_changes([{"path": p} for p in all_paths])]
     stat = gitops.bounded_diff(root, f"{base}..HEAD", selected, HOLISTIC_STAT_LIMIT, stat=True)
+    indexed = set(gitops.run(root, "ls-files", "-z").stdout.split(b"\0"))
     heading = f"git diff {base}..HEAD --stat (selected paths)\n{stat}"
+    if not stat.strip():
+        heading += (
+            "\nNo committed changes in this selected range. Ledger-only accepted work may "
+            "remain in the working tree; the bounded per-slice evidence below includes it."
+        )
     if len(all_paths) > HOLISTIC_PATH_LIMIT:
         heading += "\nBulk detail omitted by the bounded evidence gate; source detail follows."
-    sections, seen = [], set()
+    sections = []
     remaining = max(0, limit - len(heading.encode("utf-8")) - 512)
-    for sid, paths in paths_by_slice.items():
-        unique = [path for path in selected if path in paths and path not in seen]
-        seen.update(unique)
-        if not unique or remaining < 256:
-            continue
-        body = gitops.bounded_diff(root, f"{base}..HEAD", unique, remaining)
+    for rel in selected:
+        if remaining < 256:
+            break
+        sid = next(sid for sid, paths in paths_by_slice.items() if rel in paths)
+        # Compare the accepted current worktree to the first accepted base. This
+        # includes committed and ledger-only edits, in global source-first order.
+        per_file = min(4096, remaining - 128)
+        body = gitops.bounded_diff(root, base, [rel], per_file)
+        if not body and rel.encode("utf-8") not in indexed and (root / rel).is_file():
+            excerpt = read_excerpt(root, rel, max(128, per_file - 256))
+            if "\0" in excerpt:
+                excerpt = "[Binary artifact; inspect its manifest identity and named file.]"
+            body = f"\nAdded file: {rel}\n" + excerpt
+        if not body:
+            body = f"No textual change against the accepted base for {rel}."
         section = f"\n### {sid}\n\n{body.rstrip()}"
         sections.append(section)
         remaining -= len(section.encode("utf-8"))
-    return diff_block(heading + "\nPer-slice diffs:" + "".join(sections), all_paths, limit)
+    heading += (
+        "\nPer-slice diffs: current working tree against accepted base "
+        "(bounded; complete manifests remain authoritative)."
+    )
+    return diff_block(heading + "".join(sections), all_paths, limit)
 
 
 def accepted_base(root, events, milestone):
+    import _git as gitops
+
     ids = {item["id"] for item in milestone["slices"]}
     for index, event in enumerate(events):
         if event["ev"] != "accepted" or event["slice"] not in ids:
@@ -389,7 +441,11 @@ def accepted_base(root, events, milestone):
         base = receipt.get("base_commit")
         valid = (
             isinstance(base, str)
-            and c.git(root, "cat-file", "-e", base + "^{commit}", check=False).returncode == 0
+            and re.fullmatch(r"[a-f0-9]{40}|[a-f0-9]{64}", base)
+            and gitops.run(
+                root, "cat-file", "-e", base + "^{commit}", limit=1024, check=False
+            ).returncode
+            == 0
         )
         if valid:
             return base
@@ -397,10 +453,26 @@ def accepted_base(root, events, milestone):
     raise ValueError("cannot resolve the first accepted base commit for holistic review")
 
 
-def findings_context(root, state):
+def findings_context(root, state, events=None, sid=None):
     prefix = ""
     if state.get("unblock_reason"):
         prefix = f"Unblock reason: {state['unblock_reason']}\n\n"
+    if events is not None and sid:
+        import _findings as findings
+
+        projected, _ = findings.project(root, events)
+        rows = []
+        for (path, sha, identity), item in projected.items():
+            if item["disposition"] not in ("open", "carried") or not (
+                item["owner"] == sid or identity.startswith(sid + "-")
+            ):
+                continue
+            rows.append(
+                f"Source review: `{path}` (sha256 `{sha}`)\n"
+                f"| {identity} | {item['severity']} | {item['disposition']} | {item['summary']} |"
+            )
+        if rows:
+            return prefix + "\n\n".join(rows)
     if state["open"] and state["report"]:
         report = parse_review((root / state["report"]).read_text(encoding="utf-8"))
         rows = [
@@ -415,7 +487,9 @@ def findings_context(root, state):
         if not receipt["ok"]:
             command = receipt["commands"][-1]
             return (
-                prefix + "Previous verification failed.\n\nstdout tail:\n```text\n"
+                prefix + "Previous verification failed. Complete receipt: "
+                f"`{state['receipt']}` (sha256 `{c.sha(root / state['receipt'])}`)"
+                "\n\nstdout tail:\n```text\n"
                 f"{command['stdout_tail']}\n```\n\nstderr tail:\n```text\n"
                 f"{command['stderr_tail']}\n```"
             )

@@ -8,6 +8,7 @@ import re
 import subprocess
 import tempfile
 from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -16,7 +17,85 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 HASH_CHUNK = 64 * 1024
+MEMO_LIMIT = 16 * 1024 * 1024
 _LOCKS = {}
+_COMMAND = ContextVar("template_command", default=None)
+_ARTIFACTS = ContextVar("template_artifacts", default=None)
+
+
+@contextmanager
+def command_scope():
+    """Share immutable validation results only until the outer command returns."""
+    if _COMMAND.get() is not None:
+        yield
+        return
+    token = _COMMAND.set({})
+    try:
+        yield
+    finally:
+        _COMMAND.reset(token)
+
+
+def cache(namespace):
+    current = _COMMAND.get()
+    return None if current is None else current.setdefault(namespace, {})
+
+
+def remember(namespace, key, value, source_bytes):
+    """Bound optional evidence memoization; overflow still validates without caching."""
+    memo = cache(namespace)
+    if memo is None or key in memo:
+        return
+    budget = cache("evidence_memo_budget")
+    used, count = budget.get("bytes", 0), budget.get("entries", 0)
+    if used + source_bytes <= MEMO_LIMIT and count < 10_000:
+        memo[key] = value
+        budget.update(bytes=used + source_bytes, entries=count + 1)
+
+
+def file_key(path):
+    path = Path(path).resolve()
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        return (str(path), None)
+    return (str(path), stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+
+
+@contextmanager
+def artifact_batch(root):
+    """Roll back solely owned artifacts on confirmed refusal, never uncertain append."""
+    if _ARTIFACTS.get() is not None:
+        yield
+        return
+    path = Path(root) / "05_governance/ledger.jsonl"
+    before = path.read_bytes() if path.exists() else b""
+    created = []
+    token = _ARTIFACTS.set(created)
+    try:
+        yield
+    except ValueError:
+        after = path.read_bytes() if path.exists() else b""
+        if before == after:
+            for artifact, identity, digest in reversed(created):
+                if file_key(artifact) == identity and sha(artifact) == digest:
+                    artifact.unlink()
+        raise
+    finally:
+        _ARTIFACTS.reset(token)
+
+
+def artifact_text(path, text):
+    """Publish immutable text; register only files created by this transaction."""
+    digest = evidence_sha_bytes(text.encode("utf-8"))
+    if path.exists():
+        if sha(path) != digest:
+            raise ValueError("immutable artifact collision")
+        return
+    atomic_text(path, text)
+    created = _ARTIFACTS.get()
+    if created is not None:
+        created.append((path, file_key(path), digest))
 
 
 def now() -> str:
@@ -122,7 +201,9 @@ def git(root: Path, *args: str, check: bool = True, text: bool = False):
 
 
 def status_bytes(root: Path) -> bytes:
-    return git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all").stdout
+    import _git
+
+    return _git.run(root, "status", "--porcelain=v1", "-z", "--untracked-files=all").stdout
 
 
 @contextmanager
@@ -177,7 +258,7 @@ def writer_lock(root):
 
 @contextmanager
 def mutation(root, rm=None):
-    with writer_lock(root):
+    with command_scope(), writer_lock(root), artifact_batch(root):
         import _protocol
 
         _protocol.ensure_writable(root, rm)

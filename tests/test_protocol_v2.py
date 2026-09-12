@@ -68,6 +68,9 @@ class GrammarTests(unittest.TestCase):
         rm = roadmap.load(ROOT)
         for case in data["cases"]:
             with self.subTest(case=case["name"]):
+                rm = roadmap.load(ROOT)
+                if "holistic_review" in case:
+                    rm["milestones"][0]["holistic_review"] = case["holistic_review"]
                 if not case["valid"]:
                     with self.assertRaises(ValueError):
                         for row in case["events"]:

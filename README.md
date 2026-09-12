@@ -22,10 +22,14 @@ workspace statuses, record decisions, and set a real project-owned
 `verification.full` command. The provided hermetic entry point fails closed
 until its `COMMANDS` list is customized with argv lists or safe per-directory
 argv/cwd mappings. Commands run from the project while temporary output is
-directed through the external `VERIFICATION_SCRATCH`. Run:
+directed through the external `VERIFICATION_SCRATCH`. From the extracted project
+directory, initialize Git (configure your Git name/email if needed) and run:
 
 ```powershell
 python scripts/roadmap.py check
+git init
+git add --all
+git commit -m "Initialize project"
 python scripts/roadmap.py render
 ```
 
@@ -43,7 +47,10 @@ python scripts/ledger.py accept M001-S01
 The architect hands the generated coding/review prompts to the chosen agents.
 Optional `coded --notes <path>` binds saved notes. Add `--commit` to the original
 accept command when a commit is authorized; acceptance otherwise changes only
-the ledger. If that commit is interrupted, `ledger.py recover` diagnoses the
+the ledger. **Before the next slice, inspect and commit the accepted product and
+loop evidence yourself when using ledger-only acceptance.** New slices require a
+clean starting tree; `--allow-dirty` is deliberate architect attribution.
+If a requested commit is interrupted, `ledger.py recover` diagnoses the
 pending intent and `recover --execute` performs only its missing Git work.
 `prompt.py M001-S01 --preview` renders the actual prompt without writes.
 Explicit blockers and recorded resolutions are exceptional boundaries, not extra

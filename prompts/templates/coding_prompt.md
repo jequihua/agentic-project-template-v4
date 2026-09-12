@@ -52,6 +52,9 @@ Full, run once before finishing:
 Begin with one short paragraph explaining the implemented approach. Then give
 exactly four lists: changed files; commands run with pass or fail; what could
 not be verified; deviations from this prompt. Facts only.
+For a blocker, use the last two lists to name the affected requirement, observed
+reason and evidence paths, who must act and the required action. Preserve work
+and identify what remains; do not invent authority or claim unobserved success.
 
 ## Autonomous outcome
 

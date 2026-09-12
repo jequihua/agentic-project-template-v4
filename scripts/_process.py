@@ -130,6 +130,9 @@ def run(argv, *, cwd, env=None, timeout=600, tail_limit=16384, keep="tail", inpu
     command = (
         [sys.executable, "-I", "-S", str(Path(__file__).resolve()), "--child"] if job else argv
     )
+    control_read = control_write = None
+    startup = None
+    launch = b""
     process = None
     started = time.monotonic()
     out, err = _Tail(tail_limit, keep), _Tail(tail_limit, keep)
@@ -137,6 +140,15 @@ def run(argv, *, cwd, env=None, timeout=600, tail_limit=16384, keep="tail", inpu
     timed_out = False
     code = None
     try:
+        if job:
+            import msvcrt
+
+            control_read, control_write = os.pipe()
+            os.set_inheritable(control_write, True)
+            handle = msvcrt.get_osfhandle(control_write)
+            startup = subprocess.STARTUPINFO()
+            startup.lpAttributeList = {"handle_list": [handle]}
+            command.append(str(handle))
         process = subprocess.Popen(
             command,
             cwd=cwd,
@@ -146,8 +158,11 @@ def run(argv, *, cwd, env=None, timeout=600, tail_limit=16384, keep="tail", inpu
             stderr=subprocess.PIPE,
             shell=False,
             start_new_session=not bool(job),
+            startupinfo=startup,
         )
         if job:
+            os.close(control_write)
+            control_write = None
             job.assign(process)
         for tail, stream in ((out, process.stdout), (err, process.stderr)):
             reader = threading.Thread(target=tail.read, args=(stream,), daemon=True)
@@ -196,16 +211,25 @@ def run(argv, *, cwd, env=None, timeout=600, tail_limit=16384, keep="tail", inpu
             process.wait()
         for reader in readers:
             reader.join(timeout=5)
+        if control_write is not None:
+            os.close(control_write)
+        if control_read is not None:
+            launch = os.read(control_read, 1)
+            os.close(control_read)
         if any(reader.is_alive() for reader in readers):
             raise OSError("owned verification output pipes did not close")
     stdout, stderr = out.value(), err.value()
-    if code == 254 and stderr.startswith(b"verification launch failed: "):
+    if job and launch != b"1":
         code = None
     return Result(code, stdout, stderr, timed_out, out.total, err.total)
 
 
 if __name__ == "__main__":
     # The parent sends argv only after assigning this process to its Windows Job.
+    import msvcrt
+
+    control = msvcrt.open_osfhandle(int(sys.argv[2]), os.O_WRONLY | os.O_BINARY)
+    os.set_inheritable(control, False)
     command = json.loads(sys.stdin.buffer.read())
     try:
         supplied = command["input"]
@@ -216,7 +240,11 @@ if __name__ == "__main__":
             input=base64.b64decode(supplied) if supplied is not None else None,
             **({"stdin": subprocess.DEVNULL} if supplied is None else {}),
         )
+        os.write(control, b"1")
+        os.close(control)
         raise SystemExit(result.returncode)
     except OSError as exc:
+        os.write(control, b"0")
+        os.close(control)
         print(f"verification launch failed: {type(exc).__name__}: {exc}", file=sys.stderr)
         raise SystemExit(254)

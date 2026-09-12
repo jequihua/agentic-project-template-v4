@@ -84,10 +84,10 @@ def envelope(root, ref, sid, round_no):
 def _reference(root, ref):
     p.reference(ref)
     path = c.repo_path(root, ref["path"])
-    p.need(
-        path.is_file() and not path.is_symlink() and c.sha(path) == ref["sha"],
-        "immutable evidence drift: " + ref["path"],
-    )
+    message = "immutable evidence drift: " + ref["path"]
+    p.need(path.is_file() and not path.is_symlink(), message)
+    identity = c.file_key(path)
+    p.need(c.sha(path) == ref["sha"] and c.file_key(path) == identity, message)
 
 
 def _receipt(root, event, coded, issued):
@@ -207,13 +207,9 @@ def _receipt(root, event, coded, issued):
     return value
 
 
-def _review(root, event, prior, rm):
+def _review(root, event, rm, projection):
     ref = {"path": event["report"], "sha": event["sha"]}
-    _reference(root, ref)
-    path = c.repo_path(root, ref["path"])
-    p.need(path.stat().st_size <= 1024 * 1024, "review exceeds 1 MiB")
-    text = path.read_text(encoding="utf-8")
-    report = _evidence.parse_review(text)
+    _, report = _findings.read_report(root, ref)
     scope = event.get("slice", event.get("milestone", event.get("scope")))
     round_no = event.get("round", "holistic")
     if round_no == "holistic":
@@ -233,37 +229,32 @@ def _review(root, event, prior, rm):
             ),
             "holistic finding must identify its affected slice",
         )
-    waived = report["verdict"] == "override" or any(
-        row["disposition"] == "waived_by_human"
-        for row in report["findings"] + _findings.updates(text)
-    )
-    p.need(not waived or event["by"] == "human", "waiver requires --by human")
     if event["ev"] != "review_checkpoint":
         p.need(
             report["verdict"] == event["verdict"] and report["open"] == event["open"],
             "recorded review verdict/open findings mismatch",
         )
-        import ledger
-
-        current = ledger.fold(prior, rm)["slices"].get(scope)
-        _findings.validate_record(root, prior, ref["path"], ref["sha"], event["by"], current)
-    else:
-        _findings.project(root, prior + [event])
+    projection.add((ref["path"], ref["sha"]), event)
+    if event["ev"] != "review_checkpoint":
+        projection.require_closure(report)
 
 
 def errors(root, events, rm):
     """Check immutable artifact semantics without comparing historical files to today."""
     failures, issued, coded, cumulative = [], {}, {}, {}
-    for index, event in enumerate(events):
+    projection = _findings.Projection(root)
+    for event in events:
         sid = event.get("slice")
         key = (sid, event.get("round"))
         if event.get("ev") == "coded":
             cumulative.setdefault(sid, {}).update(
                 {row["path"]: {**row, "round": event["round"]} for row in event["changed"]}
             )
-        if event.get("schema") != p.SCHEMA:
-            continue
         try:
+            if event.get("schema") != p.SCHEMA:
+                for ref, previous in _findings.report_events([event]):
+                    projection.add(ref, previous)
+                continue
             for ref in p.event_references(event):
                 _reference(root, ref)
             if event["ev"] == "prompt":
@@ -296,14 +287,21 @@ def errors(root, events, rm):
                 p.need(key in issued and key in coded, "receipt lacks issued/coded evidence")
                 _receipt(root, event, coded[key], issued[key])
             elif event["ev"] in ("reviewed", "holistic_reviewed", "review_checkpoint"):
-                _review(root, event, events[:index], rm)
+                _review(root, event, rm, projection)
+            elif event["ev"] == "artifact" and event.get("role") == "holistic_report":
+                projection.add((event["path"], event["sha"]), event)
         except (KeyError, TypeError, OSError, ValueError) as exc:
             failures.append(f"{event['ev']} {sid or event.get('scope', '')}: {exc}")
     return failures
 
 
 def evidence_paths(root, events):
-    paths = {"05_governance/ledger.jsonl", "05_governance/backlog.md", "roadmap.yaml"}
+    paths = {
+        "05_governance/ledger.jsonl",
+        "05_governance/backlog.md",
+        "roadmap.yaml",
+        "docs/roadmap.md",
+    }
     for event in events:
         paths.update(
             event[key] for key in ("path", "receipt", "report", "notes_path") if event.get(key)
@@ -360,6 +358,8 @@ def require_active(root, current, events, extra=()):
             and not path.is_symlink()
             and c.sha(path) == row["sha"]
         )
+        if not matches and current["step"] == "accepted":
+            matches = _evidence.matches_head(root, rel)
         p.need(matches, "active product differs from recorded evidence: " + rel)
     dirty = _evidence.changed_files(root)
     unexpected = sorted({row["path"] for row in dirty} - set(rows) - set(baseline) - excluded)

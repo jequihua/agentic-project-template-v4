@@ -12,7 +12,6 @@ import _integrity as integrity
 import ledger
 import roadmap
 
-
 CODING_LIMIT, REVIEW_LIMIT = 16 * 1024, 48 * 1024
 KNOWN = {
     "slice_id",
@@ -52,6 +51,16 @@ ENVELOPE_SECTIONS = (
     ("Findings and resolutions", "open_findings"),
     ("Memory", "memory"),
 )
+REVIEW_SECTIONS = (
+    ("Changed files", "diff_manifest"),
+    ("Code diff", "diff_evidence"),
+    ("Coder notes", "coder_notes"),
+    ("Verification receipt", "receipt"),
+    ("Prior findings", "prior_findings"),
+    ("Report destination", "report_path"),
+    ("Finding IDs", "finding_id_rule"),
+    ("Finding reconciliation", "finding_updates"),
+)
 
 
 def _bullets(values, empty="- None declared."):
@@ -65,10 +74,10 @@ def _argv(values):
     return "\n\n".join("```text\n" + " ".join(command) + "\n```" for command in commands)
 
 
-def _render(path, values, optional=(), complete=False):
-    text = evidence.read_excerpt(path.parent, path.name, REVIEW_LIMIT + 1).replace("\r\n", "\n")
-    if path.stat().st_size > REVIEW_LIMIT:
-        raise ValueError("template framing exceeds 49152 bytes; reduce the custom template")
+def _render(path, values, optional=(), complete=False, *, limit=REVIEW_LIMIT, diagnose=True):
+    if path.stat().st_size > limit:
+        raise ValueError(f"template framing exceeds {limit} bytes; reduce the custom template")
+    text = evidence.read_excerpt(path.parent, path.name, limit + 1).replace("\r\n", "\n")
     found = set(re.findall(r"{{([a-z_]+)}}", text))
     unknown = found - KNOWN
     if unknown:
@@ -79,21 +88,61 @@ def _render(path, values, optional=(), complete=False):
     for heading, key in optional:
         if not values.get(key):
             pattern = rf"\n## {re.escape(heading)}\n.*?(?=\n## |\Z)"
-            text = re.sub(pattern, "", text, flags=re.S)
+            text = re.sub(pattern, "", text, flags=re.DOTALL)
+    if diagnose:
+        for key in sorted(set(re.findall(r"{{([a-z_]+)}}", text))):
+            if not values.get(key):
+                print(f"diagnostic: template renders empty {key}", file=sys.stderr)
     text = re.sub(r"{{([a-z_]+)}}", lambda match: str(values.get(match[1], "")), text)
     # Preserve project-owned templates while making omitted authority visible.
     additions = ENVELOPE_SECTIONS if complete else (("Advisory notes", "notes"),)
+    if complete:
+        additions += (("Task", "slice_id"), ("Title", "title"), ("Round", "round"))
+    if complete and "report_path" in values:
+        additions += REVIEW_SECTIONS
     for heading, key in additions:
         if key not in found and values.get(key):
-            if complete:
+            if diagnose:
                 print(
                     f"diagnostic: custom template omitted {key}; appended its full section",
                     file=sys.stderr,
                 )
             text += f"\n\n## {heading}\n\n{values[key]}"
+    if (
+        complete
+        and "report_path" in values
+        and not all(marker in bare for marker in ("# Review:", "## Closure Decision", "## Verdict"))
+    ):
+        text += "\n\n## Required report contract\n\n" + _report_contract(values)
     if values.get("outcome_contract") and "outcome_contract" not in found:
+        if diagnose:
+            print(
+                "diagnostic: custom template omitted outcome_contract; appended its full section",
+                file=sys.stderr,
+            )
         text += "\n\n## Autonomous outcome\n\n" + values["outcome_contract"]
+    if diagnose:
+        handled = {key for _, key in additions} | {"outcome_contract"}
+        for key in sorted(values.keys() & KNOWN - found - handled):
+            if values[key]:
+                print(f"diagnostic: custom template omitted {key}", file=sys.stderr)
     return text.replace("\r\n", "\n").rstrip() + "\n"
+
+
+def _report_contract(values):
+    return (
+        "Review is product-read-only. In manual mode write only `"
+        + values["report_path"]
+        + "` if granted, or return the report for the architect to save. Autonomous seats "
+        "return the complete report. Use this exact shape as plain final text, choosing one "
+        "value on each choice line. A pass requires zero open P0-P2.\n\n```markdown\n"
+        + f"# Review: {values['slice_id']} round {values['round']}\n\n"
+        "## Findings\n| id | severity | disposition | summary |\n"
+        "| --- | --- | --- | --- |\n\n## Closure Decision\n"
+        "Objective status: achieved | not_achieved | indeterminate\n"
+        "Objective evidence: one sentence tied to acceptance and the receipt\n\n"
+        "## Verdict\nVerdict: pass|needs_work|blocked - next: one move\n```"
+    )
 
 
 def _next(root):
@@ -121,8 +170,10 @@ def _memory(rm, item):
         lines += ["", "Read for this slice:"] + [f"- `{page}`" for page in pages]
     lines += [
         "",
-        "Cite claim or page ids used. Report stale or contradicted claims; "
-        "do not hand-edit memory.",
+        (
+            "Cite claim or page ids used. Report stale or contradicted claims; "
+            "do not hand-edit memory."
+        ),
     ]
     return "\n".join(lines)
 
@@ -141,14 +192,13 @@ def _json(value):
     return json.dumps(value, ensure_ascii=False, indent=2) + "\n"
 
 
-def _envelope(root, rm, item, current):
-    context = evidence.findings_context(root, current)
+def _envelope(root, rm, item, current, events=None):
+    context = evidence.findings_context(root, current, events, item["id"])
     if current.get("blocker"):
         blocker = current["blocker"]
         if isinstance(blocker, dict) and "path" in blocker:
-            context += "\n\nOriginal blocker:\n" + evidence.read_excerpt(
-                root, blocker["path"], CODING_LIMIT
-            )
+            context += "\n\nOriginal blocker: " + _ref(root, blocker["path"], blocker["sha"])
+            context += "\n" + evidence.read_excerpt(root, blocker["path"], 2048)
         else:
             context += "\n\nOriginal blocker:\n" + _json(blocker)
     if current.get("resolution"):
@@ -221,7 +271,7 @@ def _frozen(root, rm, events, item, current):
         if c.sha(path) != ref["sha"]:
             raise ValueError("immutable acceptance envelope drift")
         return json.loads(path.read_text(encoding="utf-8"))
-    return _envelope(root, rm, item, current)
+    return _envelope(root, rm, item, current, events)
 
 
 def _diagnostics(root, envelope):
@@ -230,11 +280,13 @@ def _diagnostics(root, envelope):
         path = c.repo_path(root, c.safe_rel(rel))
         if not path.is_file() or path.is_symlink():
             messages.append(f"missing required read: {rel} (future outputs belong in acceptance)")
-    if re.search(r"\b(must|required|gate|shall)\b", envelope["notes"], re.I):
+    if re.search(r"\b(must|required|gate|shall)\b", envelope["notes"], re.IGNORECASE):
         messages.append("advisory notes contain gate language; move mandatory gates to acceptance")
     # Diagnose only explicit path references, without guessing prose into scope.
-    for rel in re.findall(r"`([^`\n]+/[^`\n]+)`", "\n".join(envelope["acceptance"])):
+    for rel in re.findall(r"`([^`\n]+)`", "\n".join(envelope["acceptance"])):
         if re.search(r"\s", rel) or rel.startswith(("http:", "https:")):
+            continue
+        if "/" not in rel and not Path(rel).suffix:
             continue
         try:
             c.safe_rel(rel)
@@ -301,7 +353,7 @@ def _save(root, rel, text):
         ):
             raise ValueError(f"immutable evidence path already occupied: {rel}")
     else:
-        c.atomic_text(path, text)
+        c.artifact_text(path, text)
     return {"path": rel, "sha": c.evidence_sha_bytes(text.encode("utf-8"))}
 
 
@@ -314,6 +366,16 @@ def _support(scope, label, text, artifacts):
     rel = f"05_governance/reviews/{scope.split('-')[0].lower()}/{scope}_{digest[:16]}_{label}"
     artifacts.append((rel, text))
     return f"`{rel}` (sha256 `{digest}`; read as a file, starting at line 1)"
+
+
+def _context(values, key, scope, artifacts):
+    """Externalize supporting history, retaining complete hash-bound readable context."""
+    text = values[key]
+    if len(text.encode("utf-8")) > 2048:
+        ref = _support(scope, "context.md", text.rstrip() + "\n", artifacts)
+        excerpt = text.encode("utf-8")[:2048].decode("utf-8", "ignore")
+        values[key] = "Complete findings and recovery context: " + ref + "\n\n" + excerpt
+        values[key] += "\n\n[Context excerpt bounded; read the complete context file above.]"
 
 
 def _diff_excerpt(diff):
@@ -350,7 +412,7 @@ def coding(root, sid, allow_dirty=False, *, preview=False, backend="manual"):
     if backend == "autonomous" and not _v2(rm):
         raise ValueError("structured autonomous prompts require the /2 roadmap contract")
     _, item = roadmap.slice_by_id(rm, sid)
-    envelope = _envelope(root, rm, item, current)
+    envelope = _envelope(root, rm, item, current, events)
     if current.get("blocker") and current.get("envelope"):
         # A resolution supplies new authority, without silently replacing the task.
         ref = current["envelope"]
@@ -368,13 +430,19 @@ def coding(root, sid, allow_dirty=False, *, preview=False, backend="manual"):
             )
     for event in events:
         if event["ev"] == "resolved" and event["scope"] == sid:
-            envelope["findings"] += "\n\nResolution authority: " + ", ".join(
+            authority = "Resolution authority: " + ", ".join(
                 _ref(root, ref["path"], ref["sha"]) for ref in event["authority"]
             )
+            envelope["findings"] = authority + "\n\n" + envelope["findings"]
     values = _values(envelope)
     values["outcome_contract"] = _finish(backend, sid, current["round"])
-    text = _sized(
-        _render(
+    artifacts = []
+    if _v2(rm):
+        _context(values, "open_findings", sid, artifacts)
+        envelope["findings"] = values["open_findings"]
+
+    def render(diagnose=False):
+        return _render(
             root / "prompts/templates/coding_prompt.md",
             values,
             (
@@ -384,10 +452,22 @@ def coding(root, sid, allow_dirty=False, *, preview=False, backend="manual"):
                 ("Autonomous outcome", "outcome_contract"),
             ),
             _v2(rm),
-        ),
-        values,
-        CODING_LIMIT,
-    )
+            limit=CODING_LIMIT,
+            diagnose=diagnose,
+        )
+
+    text = render()
+    if _v2(rm) and len(text.encode("utf-8")) > CODING_LIMIT and values["open_findings"]:
+        if artifacts:
+            rel, body = artifacts[0]
+            ref = _ref(root, rel, c.evidence_sha_bytes(body.encode("utf-8")))
+        else:
+            ref = _support(sid, "context.md", values["open_findings"] + "\n", artifacts)
+        values["open_findings"] = "Read complete findings and recovery context: " + ref
+        envelope["findings"] = values["open_findings"]
+        text = render()
+    _sized(text, values, CODING_LIMIT)
+    text = render(True)
     diagnostics = _diagnostics(root, envelope)
     for message in diagnostics:
         print(f"diagnostic: {message}", file=sys.stderr)
@@ -397,11 +477,13 @@ def coding(root, sid, allow_dirty=False, *, preview=False, backend="manual"):
     baseline = evidence.prompt_baseline(root, rm, events, sid, allow_dirty)
     if preview:
         return text
+    number = _next(root)
     event = {"ev": "prompt", "by": "architect", "slice": sid, "round": current["round"]}
     if _v2(rm):
+        _issue_support(root, rm, events, sid, current["round"], artifacts)
         rel = f"05_governance/reviews/{sid.split('-')[0].lower()}/{sid}_r{current['round']}"
         event["envelope"] = _save(root, rel + "_envelope.json", _json(envelope))
-    rel = f"prompts/for_coding_agent/{_next(root):03d}_{sid}_r{current['round']}.md"
+    rel = f"prompts/for_coding_agent/{number:03d}_{sid}_r{current['round']}.md"
     event.update(_save(root, rel, text))
     if baseline:
         event["baseline"] = baseline
@@ -434,7 +516,7 @@ def _review_values(envelope, report):
     return values
 
 
-def _render_review(root, values, version2):
+def _render_review(root, values, version2, *, diagnose=True):
     values["finding_updates"] = (
         "To change an older finding, add `## Finding updates` before Closure Decision with "
         "columns `source | sha | id | disposition | related`. Name the original report path, "
@@ -444,7 +526,7 @@ def _render_review(root, values, version2):
         else ""
     )
 
-    def render():
+    def render(diagnostics=False):
         return _render(
             root / "prompts/templates/review_prompt.md",
             values,
@@ -452,20 +534,24 @@ def _render_review(root, values, version2):
                 ("Coder notes", "coder_notes"),
                 ("Prior findings", "prior_findings"),
                 ("Advisory notes", "notes"),
+                ("Memory", "memory"),
+                ("Finding reconciliation", "finding_updates"),
             ),
             version2,
+            diagnose=diagnostics,
         )
 
     text = render()
     # Externalize supporting excerpts before asking to reduce authority/scope.
-    for key in ("diff_evidence", "coder_notes", "receipt", "diff_manifest"):
+    for key in ("diff_evidence", "coder_notes", "receipt", "diff_manifest", "prior_findings"):
         if len(text.encode("utf-8")) <= REVIEW_LIMIT:
             break
         refs = re.findall(r"`[^`\n]+` \(sha256 `[a-f0-9]{64}`[^)\n]*\)", values[key])
         if refs:
             values[key] = "Complete evidence (read with file tools):\n" + _bullets(refs)
             text = render()
-    return _sized(text, values, REVIEW_LIMIT)
+    _sized(text, values, REVIEW_LIMIT)
+    return render(True) if diagnose else text
 
 
 def review(root, sid, *, preview=False, backend="manual"):
@@ -480,8 +566,10 @@ def review(root, sid, *, preview=False, backend="manual"):
         f"05_governance/reviews/{sid.split('-')[0].lower()}/{sid}_r{current['round']}_review.md"
     )
     values = _review_values(envelope, report)
-    mandatory = _render_review(root, values, _v2(rm))
     artifacts = []
+    if _v2(rm):
+        _context(values, "prior_findings", sid, artifacts)
+    mandatory = _render_review(root, values, _v2(rm), diagnose=False)
     cumulative = evidence.slice_changes(events, sid)
     ledger.require_product(root, current)
     integrity.require_active(root, current, events)
@@ -508,7 +596,10 @@ def review(root, sid, *, preview=False, backend="manual"):
             )
     else:
         values["diff_manifest"] = evidence.bounded_text(
-            _bullets(rows), "05_governance/ledger.jsonl", 4096
+            _bullets(rows),
+            "05_governance/ledger.jsonl",
+            4096,
+            digest=c.sha(root / "05_governance/ledger.jsonl"),
         )
     values["receipt"] = _receipt(root, current)
     if current["notes"]:
@@ -517,11 +608,11 @@ def review(root, sid, *, preview=False, backend="manual"):
     if current.get("outcome"):
         ref = current["outcome"]
         values["coder_notes"] += "\n\nCoder outcome: " + _ref(root, ref["path"], ref["sha"])
-        values["coder_notes"] += "\n" + evidence.read_excerpt(root, ref["path"], CODING_LIMIT)
+        values["coder_notes"] += "\n" + evidence.read_excerpt(root, ref["path"], 2048)
     # Admission of the mandatory text precedes Git and any bulk file reads.
     room = REVIEW_LIMIT - len(mandatory.encode("utf-8")) - 12000
     if room < 1024:
-        _render_review(root, values, _v2(rm))
+        _render_review(root, values, _v2(rm), diagnose=False)
         room = 1024
     diff = evidence.review_diff(root, current["changed"], min(24000, room))
     if _v2(rm):
@@ -532,8 +623,9 @@ def review(root, sid, *, preview=False, backend="manual"):
     text = _render_review(root, values, _v2(rm))
     if preview:
         return text
+    number = _next(root)
     _issue_support(root, rm, events, sid, current["round"], artifacts)
-    rel = f"prompts/for_review_agent/{_next(root):03d}_{sid}_r{current['round']}.md"
+    rel = f"prompts/for_review_agent/{number:03d}_{sid}_r{current['round']}.md"
     ledger.append(
         root / "05_governance/ledger.jsonl",
         {
@@ -636,8 +728,10 @@ def holistic(root, mid, *, preview=False, backend="manual"):
         "Every P0-P2 finding ID must start with the affected slice ID, "
         "for example `M001-S02-H1-F1`."
     )
-    mandatory = _render_review(root, values, _v2(rm))
     artifacts, rows, paths_by_slice, receipts = [], [], {}, []
+    if _v2(rm):
+        _context(values, "prior_findings", mid, artifacts)
+    _render_review(root, values, _v2(rm), diagnose=False)
     for item in milestone["slices"]:
         sid = item["id"]
         current = state["slices"][sid]
@@ -666,14 +760,12 @@ def holistic(root, mid, *, preview=False, backend="manual"):
             ),
             "05_governance/ledger.jsonl",
             4096,
+            digest=c.sha(root / "05_governance/ledger.jsonl"),
         )
-    _render_review(root, values, _v2(rm))
+    mandatory = _render_review(root, values, _v2(rm), diagnose=False)
     room = max(
         1024,
-        REVIEW_LIMIT
-        - len(mandatory.encode("utf-8"))
-        - len(values["receipt"].encode("utf-8"))
-        - 4096,
+        REVIEW_LIMIT - len(mandatory.encode("utf-8")) - 4096,
     )
     diff = evidence.holistic_diff(
         root, evidence.accepted_base(root, events, milestone), paths_by_slice, min(24000, room)
@@ -689,8 +781,9 @@ def holistic(root, mid, *, preview=False, backend="manual"):
     text = _render_review(root, values, _v2(rm))
     if preview:
         return text
+    number = _next(root)
     _issue_support(root, rm, events, mid, "holistic", artifacts)
-    rel = f"prompts/for_review_agent/{_next(root):03d}_{mid}_holistic.md"
+    rel = f"prompts/for_review_agent/{number:03d}_{mid}_holistic.md"
     ledger.append(
         root / "05_governance/ledger.jsonl",
         {
@@ -732,7 +825,8 @@ def main(argv=None):
             return coding(root, args.slice, args.allow_dirty, **options)
 
         if preview:
-            result = render()
+            with c.command_scope():
+                result = render()
         else:
             with c.mutation(root):
                 result = render()
