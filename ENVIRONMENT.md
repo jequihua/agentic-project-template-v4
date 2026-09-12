@@ -1,6 +1,7 @@
 # Environment
 
-The scaffold supports Windows PowerShell first and POSIX shells. Runtime
+The manual candidate is qualified on Windows PowerShell; POSIX qualification is
+pending. Runtime
 requirements are Python 3.11+, PyYAML, and Git. Manual scripts are local and
 offline after installation; they use no service or credential.
 
@@ -23,6 +24,9 @@ python -m pip install --no-index --find-links <wheelhouse> --no-build-isolation 
 ```
 
 Do not commit venvs, wheels, caches, machine constraints, or executable paths.
+An optional ignored `project.local.toml` selects the project's Python executable;
+otherwise scripts use their invoking interpreter. A `/2` roadmap may pin its
+portable runtime version. See [runtime and coverage](docs/project_checks.md).
 
 ## Commands
 
@@ -43,7 +47,8 @@ its `COMMANDS` argv lists. Bare lists run from repository root; mappings such as
 subdirectory. `TEMP`, `TMP`, and `VERIFICATION_SCRATCH` identify external
 scratch space so tools can keep caches and build residue outside the project.
 
-frutlups is optional. Its committed example is `frutlups.toml`. Machine-local
-executables live only in ignored `frutlups.local.toml`, whose schema is
-`frutlups.local/1` and whose supported keys are `pi`, `claude`, `git`, `llloom`,
-`path_dirs`, and `env_passthrough`.
+frutlups is optional and unnecessary for manual work. Version 0.3.2 cannot run
+the new `/2` contract. Keep it disabled until an exact compatible pair passes
+the gates in [the upgrade guide](docs/upgrading.md). Future runner selection must
+consume the same project runtime convention. The committed `frutlups.toml`
+contains portable behavior only; machine executable paths stay ignored.

@@ -35,6 +35,10 @@ Full, run once before finishing:
 
 {{full}}
 
+## Advisory notes
+
+{{notes}}
+
 ## Findings to resolve
 
 {{open_findings}}
@@ -48,3 +52,7 @@ Full, run once before finishing:
 Begin with one short paragraph explaining the implemented approach. Then give
 exactly four lists: changed files; commands run with pass or fail; what could
 not be verified; deviations from this prompt. Facts only.
+
+## Autonomous outcome
+
+{{outcome_contract}}

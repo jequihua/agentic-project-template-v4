@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 
 import _common as c
 
@@ -19,6 +20,16 @@ def bounded_text(text, rel, limit=4096):
         return text
     clipped = raw[:limit].decode("utf-8", "ignore")
     return clipped + f"\n\n[Embedded text truncated; read the full artifact at `{rel}`.]"
+
+
+def read_excerpt(root, rel, limit=4096):
+    """Read at most the requested UTF-8 prefix, never a whole bulk artifact."""
+    path = c.repo_path(root, c.safe_rel(rel))
+    if path.is_symlink() or not path.is_file():
+        raise ValueError(f"not a regular repository file: {rel}")
+    with path.open("rb") as stream:
+        raw = stream.read(limit + 1)
+    return bounded_text(raw.decode("utf-8", "replace"), rel, limit)
 
 
 def _visible_lines(text):
@@ -57,7 +68,11 @@ def parse_review(text):
         raise ValueError("review title is missing or invalid")
     match = re.fullmatch(r"# Review: (M\d{3}(?:-S\d{2})?) round (\d+|holistic)", title.strip())
     identity, round_text = match.groups()
-    table = [line for line in lines[findings_at + 1 : closure_at] if line.strip().startswith("|")]
+    updates_at = next(
+        (i for i in range(findings_at + 1, closure_at) if lines[i].strip() == "## Finding updates"),
+        closure_at,
+    )
+    table = [line for line in lines[findings_at + 1 : updates_at] if line.strip().startswith("|")]
     header = _cells(table[0]) if table else []
     separator = _cells(table[1]) if len(table) > 1 else []
     if header != ["id", "severity", "disposition", "summary"]:
@@ -188,19 +203,25 @@ def matches_head(root, rel):
 
 
 def _known_baseline_paths(events, sid):
+    import _protocol as protocol
+
     paths = {"05_governance/ledger.jsonl", "05_governance/backlog.md"}
     milestone = sid.split("-")[0]
     for index, event in enumerate(events):
-        if event.get("slice") == sid:
+        belongs = event.get("slice") == sid or event.get("scope") == sid
+        if event.get("scope", event.get("milestone")) == milestone:
+            belongs = any(
+                later["ev"] == "reopened"
+                and later.get("slice") == sid
+                or later["ev"] == "holistic_reviewed"
+                and any(finding.startswith(sid + "-") for finding in later["open"])
+                for later in events[index:]
+            )
+        if belongs:
             paths.update(
                 event[key] for key in ("path", "receipt", "report", "notes_path") if event.get(key)
             )
-        if event.get("scope") == sid:
-            paths.add(event["path"])
-        if event.get("scope") == milestone and any(
-            later["ev"] == "reopened" and later.get("slice") == sid for later in events[index + 1 :]
-        ):
-            paths.add(event["path"])
+            paths.update(ref["path"] for ref in protocol.event_references(event))
     return paths
 
 
@@ -253,41 +274,63 @@ def rel_file(root, value):
     return rel, path
 
 
-def diff_block(text, paths):
-    notice = (
-        "\n[Diff truncated at 32 KB. Inspect the listed changed paths locally with "
-        "`git diff HEAD -- <path>`.]"
-    )
+def diff_block(text, paths, limit=DIFF_LIMIT):
+    notice = "\n[Diff truncated at 32 KB; read the named files and complete manifest.]"
     raw = text.encode("utf-8")
-    if len(raw) > DIFF_LIMIT:
-        room = DIFF_LIMIT - len(notice.encode("utf-8"))
+    if len(raw) > limit:
+        room = max(0, limit - len(notice.encode("utf-8")))
         text = raw[:room].decode("utf-8", "ignore").rstrip() + notice
     if not text.strip():
-        text = "(no textual diff; inspect " + ", ".join(paths) + ")"
+        text = "(no textual diff; inspect " + ", ".join(paths[:8]) + ")"
     return "```diff\n" + text.rstrip() + "\n```"
 
 
-def review_diff(root, changed):
-    paths = [item["path"] for item in changed]
+def selected_changes(changed):
+    """Prioritize source/config/tests before selecting a bounded evidence window."""
+    source = {".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".sh"}
+    config = {".toml", ".yaml", ".yml", ".json", ".ini", ".cfg", ".md", ".css", ".html"}
+
+    def priority(item):
+        path = item["path"]
+        suffix = Path(path).suffix.lower()
+        generated = any(
+            part in path.lower().split("/")
+            for part in ("generated", "artifacts", "outputs", "fixtures", "data")
+        )
+        rank = 0 if suffix in source else 1 if suffix in config else 2
+        return (3 if generated else rank, path)
+
+    return sorted(changed, key=priority)[:HOLISTIC_PATH_LIMIT]
+
+
+def review_diff(root, changed, limit=DIFF_LIMIT):
+    import _git as gitops
+
+    selected = selected_changes(changed)
+    paths = [item["path"] for item in selected]
     if not paths:
-        return diff_block("(no product changes)", paths)
-    result = c.git(root, "diff", "--no-ext-diff", "HEAD", "--", *paths, check=False)
-    if result.returncode:
-        raise ValueError("cannot render review diff; inspect the changed paths locally")
-    parts = [result.stdout.decode("utf-8", "replace")]
-    for item in changed:
-        if item["kind"] != "added":
-            continue
-        tracked = c.git(root, "ls-files", "--error-unmatch", "--", item["path"], check=False)
-        if tracked.returncode == 0:
-            continue
-        path = c.repo_path(root, item["path"])
-        try:
-            body = path.read_text(encoding="utf-8")
-        except UnicodeError:
-            body = f"[Added file `{item['path']}` is not UTF-8 text; inspect it locally.]"
-        parts.append(f"\nAdded file: {item['path']}\n{body}")
-    return diff_block("".join(parts), paths)
+        return diff_block("(no product changes)", paths, limit)
+    parts = ["HEAD diff filtered to current-round paths; this is not a prior-round delta.\n"]
+    remaining = max(0, limit - 512 - len(parts[0].encode("utf-8")))
+    # Bound each source separately, so one generated or unusually large file
+    # cannot consume the evidence window before the next relevant source.
+    for item in selected:
+        if remaining < 256:
+            break
+        per_file = min(4096, remaining)
+        body = gitops.bounded_diff(root, "HEAD", [item["path"]], per_file)
+        if not body and item["kind"] == "added":
+            excerpt = read_excerpt(root, item["path"], max(128, per_file - 160))
+            if "\0" in excerpt:
+                excerpt = "[Binary artifact; use its manifest identity and named file.]"
+            body = f"\nAdded file: {item['path']}\n" + excerpt
+        parts.append(body)
+        remaining -= len(body.encode("utf-8"))
+    if len(selected) < len(changed) or remaining < 256:
+        parts.append("\nEvidence window bounded; all paths remain in the complete manifest.")
+    if any("truncated" in part.lower() for part in parts):
+        parts.append("\nDiff truncated at 32 KB or the smaller per-file evidence allowance.")
+    return diff_block("".join(parts), paths, limit)
 
 
 def slice_changes(events, sid):
@@ -301,46 +344,27 @@ def slice_changes(events, sid):
     return list(latest.values())
 
 
-def holistic_diff(root, base, paths_by_slice):
-    stat = c.git(root, "diff", f"{base}..HEAD", "--stat", check=False, text=True)
-    if stat.returncode:
-        raise ValueError("cannot render holistic accepted-range diff stat")
-    heading = f"git diff {base}..HEAD --stat\n{stat.stdout}"
-    all_paths = {path for paths in paths_by_slice.values() for path in paths}
-    if (
-        len(stat.stdout.encode("utf-8")) > HOLISTIC_STAT_LIMIT
-        or len(all_paths) > HOLISTIC_PATH_LIMIT
-    ):
-        return diff_block(
-            heading + "\nPer-slice diffs omitted by the bounded evidence gate; inspect locally.",
-            sorted(all_paths),
-        )
-    sections = []
-    seen = set()
+def holistic_diff(root, base, paths_by_slice, limit=DIFF_LIMIT):
+    import _git as gitops
+
+    all_paths = list(dict.fromkeys(path for paths in paths_by_slice.values() for path in paths))
+    selected = [item["path"] for item in selected_changes([{"path": p} for p in all_paths])]
+    stat = gitops.bounded_diff(root, f"{base}..HEAD", selected, HOLISTIC_STAT_LIMIT, stat=True)
+    heading = f"git diff {base}..HEAD --stat (selected paths)\n{stat}"
+    if len(all_paths) > HOLISTIC_PATH_LIMIT:
+        heading += "\nBulk detail omitted by the bounded evidence gate; source detail follows."
+    sections, seen = [], set()
+    remaining = max(0, limit - len(heading.encode("utf-8")) - 512)
     for sid, paths in paths_by_slice.items():
-        unique = [path for path in paths if path not in seen]
+        unique = [path for path in selected if path in paths and path not in seen]
         seen.update(unique)
-        if not unique:
+        if not unique or remaining < 256:
             continue
-        result = c.git(
-            root,
-            "diff",
-            "--no-ext-diff",
-            f"{base}..HEAD",
-            "--",
-            *unique,
-            check=False,
-            text=True,
-        )
-        if result.returncode:
-            raise ValueError(f"cannot render holistic diff for {sid}")
-        sections.append(f"\n### {sid}\n\n{result.stdout.rstrip()}")
-    combined = heading + "\nPer-slice diffs:" + "".join(sections)
-    if len(combined.encode("utf-8")) > DIFF_LIMIT:
-        combined = (
-            heading + "\nPer-slice diffs omitted by the bounded evidence gate; inspect locally."
-        )
-    return diff_block(combined, sorted(all_paths))
+        body = gitops.bounded_diff(root, f"{base}..HEAD", unique, remaining)
+        section = f"\n### {sid}\n\n{body.rstrip()}"
+        sections.append(section)
+        remaining -= len(section.encode("utf-8"))
+    return diff_block(heading + "\nPer-slice diffs:" + "".join(sections), all_paths, limit)
 
 
 def accepted_base(root, events, milestone):
@@ -384,7 +408,8 @@ def findings_context(root, state):
             for item in report["findings"]
             if item["id"] in state["open"]
         ]
-        return prefix + "\n".join(rows)
+        source = f"Source review: `{state['report']}` (sha256 `{c.sha(root / state['report'])}`)"
+        return prefix + source + "\n\n" + "\n".join(rows)
     if state["receipt"]:
         receipt = json.loads((root / state["receipt"]).read_text(encoding="utf-8"))
         if not receipt["ok"]:

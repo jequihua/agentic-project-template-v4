@@ -13,18 +13,24 @@ python scripts/roadmap.py render
 python scripts/ledger.py status
 ```
 
-Never start coding while the roadmap check fails.
+Never start coding while the roadmap check fails. The shipped `/2` roadmap is a
+manual candidate. For existing projects, use [the selective upgrade procedure](upgrading.md);
+keep incompatible runners disabled.
 
 ## Manual slice walkthrough
 
 1. `python scripts/prompt.py M001-S01` writes the next coding prompt and appends
-   its `prompt` event. Known same-slice corrective state is baselined
-   automatically. Unknown dirty paths stop issuance; inspect and commit/stash
+   its `prompt` event with a frozen acceptance envelope. `--preview` renders the
+   same text without writes; `--check` reports diagnostics and section bytes.
+   Notes are advisory; mandatory gates belong in acceptance. Corrective state is
+   baselined automatically. Unknown dirty paths stop issuance; inspect and commit/stash
    them, or use `--allow-dirty` only to admit that exact architect-owned state.
 2. Save the coder's final text as the named optional coder-notes file when it is
    worth retaining. Run
    `python scripts/ledger.py coded M001-S01 --notes <path>`. The script reads Git
-   and refuses an out-of-bound change.
+   and refuses an out-of-bound change. Omit `--notes` for a simple handoff.
+   An explicit authority/environment blocker uses `ledger.py blocked` or a saved
+   structured outcome; [the exceptional commands](upgrading.md) preserve its edits.
 3. Run `python scripts/verify.py M001-S01`. It writes a receipt and records the
    result. A failure routes to the next corrective round.
 4. On success run `python scripts/prompt.py M001-S01 --review`. Its neutral
@@ -43,22 +49,24 @@ Edit the roadmap only between stable loop steps, then check and render it. Add
 or narrow slices rather than rewriting accepted history. When all milestone
 slices are accepted, run `python scripts/prompt.py --holistic M001` when the
 milestone requires holistic review. Record the report with
-`ledger.py record <report> --milestone M001`; reopen named slices for blocking
-findings or record milestone completion after pass.
+`ledger.py record <report> --milestone M001`. In `/2`, needs-work reopens affected
+slices, blocked requires resolution, and pass persists `close_pending`. Then
+`ledger.py close M001` completes closure; add `--commit` only when authorized.
 
 Holistic report names use `<MID>_holistic_review.md`, then
 `<MID>_holistic_2_review.md`, `_3_`, and so on. The first free name excludes
 existing filesystem entries and paths already named in recorded holistic
 prompts or reports, so issuing another prompt cannot reuse an earlier report.
-Both slice and holistic recording carry P3 findings marked `carried` into
-`05_governance/backlog.md`, deduplicated by finding id, after ledger appends.
+Slice and holistic recording project explicit finding dispositions into the marked
+region of `05_governance/backlog.md`. `ledger.py reconcile` rebuilds it after an
+interruption. Passing another review never implicitly closes an older finding.
 
 Owner reopening uses
 `python scripts/ledger.py reopen M001-S01 --reason "<reason>" --by human`.
-When a blocked review's external decision is resolved, a human or architect
-uses `python scripts/ledger.py unblock M001-S01 --reason "<resolution>"`. This
-preserves its findings and starts the next corrective round. frutlups stops on
-`blocked`; it cannot authorize this transition.
+After a blocker, a human or architect uses
+`ledger.py resolve M001-S01 --reason "<new fact>" --authority <decision-or-evidence>`.
+This preserves the original envelope and blocker; it grants no undeclared budget.
+Legacy `/1` reviewer blocks retain `ledger.py unblock <slice> --reason ...`.
 
 Corrective prompts recognize ledger-known prompts, receipts, reports, notes,
 and unchanged same-slice products automatically. A changed known path remains
@@ -69,16 +77,17 @@ new work; a foreign artifact or injected prompt remains unknown and refuses.
 Scripts append events only after their artifact writes succeed. After an
 interruption, inspect Git and the ledger before choosing one move:
 
-- Prompt exists, no `prompt` event: validate it, then use
-  `ledger.py prompt <SLICE> <path>`, or remove the unissued prompt.
+- Prompt exists, no `prompt` event: inspect its frozen envelope and validate it
+  before manual attribution. An unrecorded file alone never authorizes work.
 - Coder exited, no `coded`: leave the tree intact, save any notes, and run
   `ledger.py coded`; never guess or auto-revert the delta.
 - Receipt exists, no `verified`: it was not made authoritative. Preserve it if
   diagnostically useful, then rerun `verify.py`; the successful atomic write and
   event append replace the incomplete attempt.
 - Report exists, no `reviewed`: run `ledger.py record`.
-- Accepted event exists but an intended commit does not: inspect and commit the
-  exact accepted paths manually. Never append a second acceptance.
+- Approval has a pending commit intent: use `ledger.py recover` to inspect, then
+  `recover --execute` to complete only missing exact Git work. Never repeat approval.
+  Unfinishable intent needs authorized cancellation; see [recovery](upgrading.md).
 - Malformed/truncated ledger line: stop. Preserve bytes and obtain human
   authority for repair; normal commands never rewrite the ledger.
 - Out-of-prefix or crash-dirty tree: the tool leaves it unchanged for human
@@ -116,20 +125,24 @@ For example, a Python runner can pass
 `process.env.VERIFICATION_SCRATCH`. Static argv invokes the project-owned runner
 or config, which reads the runtime environment.
 
+Authoritative verification witnesses file contents, types, index and HEAD before
+and after execution, including already-dirty files. It does not claim host-wide
+isolation. The project owns acceptance-to-test discovery, product dependencies,
+and fresh-process user paths; see [project checks](project_checks.md). A runtime
+selection belongs in the optional project convention, not a conflicting runner setting.
+
 ## Autonomous operation
 
-frutlups 0.3 reads the same roadmap, templates, and ledger; creates the same
-prompts, reports, receipts, normalized hashes, baselines, and artifact events;
-and folds to the same status text. It
-does not provide manual-mode verbs. It saves reviewer final text because
-reviewer seats have no write tools. It can be stopped and manual operation can
-resume at the ledger's current step.
+frutlups remains optional. Version 0.3.2 cannot operate `/2` projects: schema
+admission refuses before model probes or writes. Do not downgrade the roadmap to
+bypass that refusal. A future exact template/runner pair must pass shared contract
+and interruption qualification before autonomous use; [the compatibility table](upgrading.md)
+records that pending boundary.
 
-Machine executables and PATH entries live in ignored `frutlups.local.toml`.
-Committed `frutlups.toml` has behavior and seat names only. frutlups sets
-`FRUTLUPS_SEAT`, so front-repository mutation is refused. It never invokes
-llloom itself; when memory is active, it exposes the executable to the seat and
-the prompt names allowed verbs.
+The future compatible runner must consume the same frozen envelope, runtime,
+receipt and recovery contracts. Reviewer seats retain read-only tools; complete
+manifests and bounded diff pages are readable files. `--backend autonomous`
+previews the structured coder outcome form without installing or invoking a runner.
 
 ## Questions and external actions
 

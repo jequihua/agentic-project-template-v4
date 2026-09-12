@@ -1,122 +1,107 @@
 # Ledger and receipt contracts
 
-## Ledger
+`05_governance/ledger.jsonl` is append-only UTF-8. Each event has `schema`, UTC
+`t`, `ev`, and `by` (`human`, `architect`, or `frutlups`). Unknown fields and
+malformed lines are refused. The writer uses `frutlups.ledger/2` under a
+`frutlups.roadmap/2` roadmap. Readers also accept legacy `/1` history followed by
+`/2`; they never rewrite old evidence or allow `/1` after `/2`. Exact new fields,
+actor rules and examples live in [the protocol contract](contracts.md).
 
-`05_governance/ledger.jsonl` is append-only UTF-8/LF. Each line has schema
-`frutlups.ledger/1`, UTC `t`, `ev`, and `by` (`human`, `architect`, or
-`frutlups`). Malformed lines and unknown fields are refused.
+## Ordinary events and evidence
 
-| Event | Required event data |
+| Event | Recorded evidence |
 | --- | --- |
-| `prompt` | `slice`, `round`, prompt `path`, `sha`; optional dirty `baseline` changed objects |
-| `artifact` | slice/milestone `scope`, positive round or `holistic`, `role`, `path`, `sha` |
-| `coded` | `slice`, `round`, `changed` (`path`, `sha`, `kind`), optional notes/usage including `cost_usd` |
-| `verified` | `slice`, `round`, receipt `receipt`, `sha`, `ok` |
-| `reviewed` | `slice`, `round`, `report`, `sha`, `verdict`, open ids, optional usage |
-| `accepted` | `slice`, `round`, optional already-known `commit` |
-| `reopened` | `slice`, new `round`, non-empty `reason` |
-| `unblocked` | blocked `slice`, next `round`, non-empty `reason`; human or architect only |
-| `milestone_done` | `milestone`, optional `holistic_report` |
-| `note` | non-empty `text`, optional `slice` |
-| `stop` | `reason`, `detail`; frutlups only |
+| `prompt` | Slice/round, prompt path/hash, frozen envelope reference; optional exact dirty baseline. |
+| `coded` | Current changed paths, cumulative manifest, implemented or blocked result; optional bound notes/outcome. |
+| `verified` | Receipt path/hash and execution result. |
+| `reviewed` | Report path/hash, verdict and open finding IDs. |
+| `accepted` | Slice approval; optional requested commit intent. |
+| `artifact` | Hash-bound review prompt, holistic report or supporting evidence; no lifecycle transition. |
+| `reopened` | Authorized new corrective round with a reason. |
+| `resolved` | Human/architect resolution with bound authority/environment references. |
+| `milestone_done` | Milestone closure; optional requested commit intent. |
 
-Changed kinds are `added`, `modified`, `deleted`, and `renamed`. Evidence SHA-256
-uses bytes with every CRLF pair normalized to LF when no NUL byte is present;
-NUL-containing data hashes byte-for-byte and lone CR bytes are unchanged. The
-same rule applies to files and Git blobs. It does not rewrite files. Front-repo
-projection hashes remain raw because they detect exact publication divergence.
-A deletion hashes the pre-change Git blob; a rename records its destination.
+Changed kinds remain `added`, `modified`, `deleted`, and `renamed`. Framework
+SHA-256 normalizes CRLF to LF when no NUL exists; lone CR and binary bytes remain
+unchanged. Raw product manifests need project-owned Git storage checks.
 
-Prompt, receipt, report, and `artifact` paths are immutable and re-hashed by
-`ledger.py check`; optional notes must remain present. Product paths are mutable:
-their latest `coded` identity must match unless the path has returned exactly to
-its current HEAD blob or to absence when HEAD lacks it.
+A `/2` manifest contains cumulative `path,sha,kind,round` rows. Notes require both `notes_path` and `notes_sha`.
+Prompt/receipt/report/manifest/outcome and supporting artifacts are immutable.
+`ledger.py check` checks their references. Active verification/review/acceptance
+also rejects product drift after the coded handoff. Historical completed Git
+witnesses validate their committed blobs rather than today's mutable worktree.
 
-`artifact` is non-transitioning. A `review_prompt` belongs to a reviewing slice
-at that round. `holistic_prompt` and `holistic_report` belong to a milestone that
-is ready for holistic review; their round is `holistic`. Architects/frutlups
-record prompts, and a human may record a holistic report. Folding validates
-scope and timing without changing lifecycle state.
+Corrective prompts baseline known evidence. Unknown dirty state needs explicit
+architect attribution; no event authorizes cleanup. Stored paths remain contained
+repository-relative POSIX paths. See [operating](operating.md) for CLI details.
 
-A prompt `baseline` uses the same path/SHA/kind objects as `changed`. Corrective
-prompts automatically record exact same-slice artifacts and matching product
-history plus the harness ledger/backlog. Unknown paths still refuse unless the
-architect inspects and admits them with `--allow-dirty`. `coded` excludes an
-entry only while all three values remain identical. CLI paths may normalize
-backslashes and one leading `./`; stored paths stay strict repository-relative
-POSIX paths.
+## Derived state
 
-## Fold
-
-Events are applied in file order for each roadmap slice:
-
-| Last relevant event | Derived step |
+| Last relevant event | Slice step |
 | --- | --- |
-| none | `unstarted`, round 1 |
+| None | `unstarted`, round 1 |
 | `prompt(r)` | `coding` |
-| `artifact` | no state change; validate review readiness |
-| `coded(r)` | `verifying` |
-| `verified(r, ok=false)` | `fix`; next prompt is r+1 |
-| `verified(r, ok=true)` | `reviewing` |
-| `reviewed(r, needs_work)` | `fix`; next prompt is r+1 |
-| `reviewed(r, blocked)` | `blocked` |
-| `unblocked(r+1)` | `fix` at r+1, preserving findings and the unblock reason |
-| `reviewed(r, pass)` | `accept_pending` |
-| `accepted(r)` | `accepted` |
-| `reopened(new r)` | `fix` at new r |
+| Implemented `coded(r)` | `verifying` |
+| Blocked `coded(r)` or blocked review | `blocked` |
+| Failed verification or needs-work review | `fix`, next round |
+| Successful verification | `reviewing` |
+| Passing review | `accept_pending` |
+| Acceptance | `accepted` |
+| Authorized reopen or blocker resolution | `fix`, next round |
 
-Wrong/decreasing rounds, illegal transitions, and unknown ids are errors. Next
-is the first open reopened slice in roadmap order. Otherwise, scan active
-milestones in order for the first non-accepted slice, skipping fully accepted
-ones. Planned/done milestones are skipped. Selection does not require
-`milestone_done`; holistic completion still does.
+Approval and requested Git completion are distinct. Ledger-only acceptance is
+sufficient when no commit was requested. Pending commit intent freezes other
+writes until exact recovery or authorized cancellation. Read-only `recover`
+diagnoses; `recover --execute` recognizes the existing witness or finishes only
+the missing Git work. Completion needs no append that dirties the ledger again.
+See [the recovery commands](upgrading.md) for unknown ownership and cancellation.
 
-Corrective rounds count prompt events above round 1; transport retries do not.
-Every candidate is validated and folded before append, so refusal changes no
-ledger bytes.
+A `/2` holistic report persists `holistic_reviewed`. Needs-work reopens its
+explicitly affected slices; blocked requires resolution; pass leaves
+`close_pending` until `close`. Re-recording the same decision does not rerun
+review or duplicate reopen events. Legacy `/1` histories retain their prior
+holistic and `unblocked` grammar.
 
-## Verification receipt
+Wrong rounds, unknown IDs and illegal transitions refuse before append. Next
+suggests an open reopened slice first, otherwise a nonaccepted slice in an active
+milestone. Manual architects may deliberately select another active slice before
+earlier holistic closure; an autonomous runner must enforce its own admitted
+run boundary. Status/index are generated views, never authority.
 
-Receipts are deterministic JSON objects shaped like:
+## Verification receipts
 
-```json
-{"schema":"frutlups.receipt/1","slice":"M001-S01","round":1,"base_commit":"...","commands":[{"argv":["python","-m","pytest"],"exit":0}],"changed_files":[],"ok":true}
-```
+`frutlups.receipt/2` references the canonical manifest instead of repeating the
+changed-path list. Legacy `/1` inline `changed_files` receipts remain readable.
+The frozen full argv runs without a shell using the selected project runtime.
+`ok` requires successful commands, no timeout and equal content/type/index/HEAD
+snapshots. A dirty-but-unchanged baseline may pass; mutation of an already-dirty
+file may not. Ignored scratch and the wider host remain outside that witness.
 
-The slice override or `verification.full` argv runs without a shell from root.
-`ok` requires exit 0, no timeout, and identical before/after Git status; a tree
-may stay dirty and still pass. Tails are at most 4 KB, outside paths become
-`<outside-repo>`, and secrets/environment values are not serialized. Writing and
-append occur after the final snapshot.
-Holistic range evidence takes `base_commit` from the first accepted slice's
-successful receipt, so that receipt and its normalized identity must remain
-portable and immutable.
+Sanitized output tails are bounded; portable runtime and observation metadata
+state what the maintained command witnesses. `fresh_process` or `clean_checkout`
+is a project declaration that the actual command must substantiate, not an
+inferred claim. [Project checks](project_checks.md) cover discovery, dependencies,
+raw storage and the documented prepare/exit/serve path. Holistic accepted-range
+evidence uses the first accepted receipt's immutable `base_commit`.
 
-## Review grammar
+## Review and finding grammar
 
-A review has one findings table (`id`, `severity`, `disposition`, `summary`),
-closure decision, and verdict section. Ids are unique; closure has one objective
-status and one evidence line. The final verdict is:
+A report has a findings table (`id,severity,disposition,summary`), one closure
+decision and exactly one `Verdict: pass|needs_work|blocked|override - next: ...`.
+Pass/override refuse open P0-P2. Only human may record an override or waiver.
+Rows split on unescaped pipes; `\|` means a literal pipe in the summary.
+Holistic P0-P2 IDs begin with the affected slice ID.
 
-`Verdict: pass|needs_work|blocked|override - next: <one move>`
+An optional `/2` Finding updates table identifies the original report path/hash
+and exact finding ID. Explicit dispositions drive the generated backlog region;
+an unrelated pass never closes an old finding. `reconcile` rebuilds that region
+without changing historical reports or architect prose. The complete table
+contract is in [contracts](contracts.md).
 
-`pass`/`override` refuse open P0-P2; only a human records `override`.
-
-Rows split on unescaped pipes; cells after the first three join with ` | ` as
-the summary. `\|` decodes to `|`. Fewer than four cells remain invalid.
-
-In a holistic report, every P0-P2 finding id begins with its affected slice id,
-for example `M001-S02-H1-F1`. Open findings are grouped by slice and cause one
-`reopened` event per slice, whose reason retains all grouped ids.
-
-Slice review manifests are cumulative across coded rounds and mark current
-versus earlier paths; their code diff remains current-round-only. Holistic
-manifests are cumulative. Per-slice diffs appear only when the stat is at most
-4 KB, there are at most 64 unique paths, and combined evidence stays within
-32 KB; otherwise the prompt gives a local-inspection pointer.
-
-## Stable status view
-
-`ledger.py status` prints `M001-S01 r1 <step>` per slice and then `next`. frutlups
-0.3 must match status, normalized hashing, artifacts, baselines, and lifecycle
-folding. `ledger.py index` is generated; neither output is another state store.
+Prompts contain the complete frozen envelope and concise evidence references.
+Source/config/test changes precede bulk artifacts. Ordinary diffs are HEAD diffs
+filtered to current-round paths, not true prior-round deltas. Manifests remain
+cumulative. Bounded diff pages can be read with file tools; no shell is required.
+Coding/review caps are 16/48 KiB UTF-8, including custom framing. Mandatory
+instructions are never truncated. `prompt.py --preview` makes the actual text
+reviewable without reserving a name or writing evidence.

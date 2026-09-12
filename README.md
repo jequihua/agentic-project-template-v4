@@ -1,9 +1,11 @@
 # Agentic Project Template v4
 
-A compact, artifact-first harness for manual or autonomous software-development
-loops. The same roadmap, ledger, prompts, receipts, and review grammar are used
-in both modes. Manual operation needs only Python 3.11+, PyYAML, and Git;
-frutlups is optional.
+A compact, artifact-first harness for manual software-development loops. This
+`/2` protocol candidate prepares shared contracts for a future compatible runner.
+Manual operation needs only Python 3.11+, PyYAML and Git. No frutlups installation
+is needed. frutlups 0.3.2 does not support `/2`; autonomous compatibility and the
+paired live canary remain pending. See `docs/upgrading.md` before upgrading an
+existing project or enabling a runner.
 
 ## Start a project
 
@@ -31,18 +33,21 @@ python scripts/roadmap.py render
 
 ```powershell
 python scripts/prompt.py M001-S01
-python scripts/ledger.py coded M001-S01 --notes <optional-coder-notes>
+python scripts/ledger.py coded M001-S01
 python scripts/verify.py M001-S01
 python scripts/prompt.py M001-S01 --review
 python scripts/ledger.py record <review-report>
-python scripts/ledger.py accept M001-S01 --commit
+python scripts/ledger.py accept M001-S01
 ```
 
 The architect hands the generated coding/review prompts to the chosen agents.
-Without `--commit`, acceptance changes only the ledger. See
-`docs/operating.md` for rounds, recovery, holistic review, and autonomous use.
-If a review is blocked, a human or architect can resume the next round with
-`ledger.py unblock <slice> --reason <resolution>`.
+Optional `coded --notes <path>` binds saved notes. Add `--commit` to the original
+accept command when a commit is authorized; acceptance otherwise changes only
+the ledger. If that commit is interrupted, `ledger.py recover` diagnoses the
+pending intent and `recover --execute` performs only its missing Git work.
+`prompt.py M001-S01 --preview` renders the actual prompt without writes.
+Explicit blockers and recorded resolutions are exceptional boundaries, not extra
+steps for every edit. See `docs/operating.md` for their commands and holistic review.
 
 ## Sources of truth
 
@@ -54,5 +59,7 @@ If a review is blocked, a human or architect can resume the next round with
 `python scripts/ledger.py status` prints the current state and next step;
 `index` renders the historical table. Do not maintain duplicate state files.
 
-Local venvs, caches, credentials, run output, and `frutlups.local.toml` are
-ignored. Record no secrets in prompts, receipts, notes, or the ledger.
+Local venvs, caches, credentials, run output, `project.local.toml` and
+`frutlups.local.toml` are ignored. Keep machine paths and secrets out of tracked
+evidence. `docs/project_checks.md` covers runtime selection, required test
+discovery, fresh-process user paths and optional raw-evidence/research guidance.

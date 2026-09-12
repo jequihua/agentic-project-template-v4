@@ -66,6 +66,10 @@ prevention, accessibility, explicit human requirements, or needed tests.
   approach, then exactly four lists: changed files; commands run with pass or
   fail; what could not be verified; deviations from the prompt. State observed
   facts, not a verdict on your own work.
+- Preserve blocked work; state the requirement, evidence, remaining work and
+  required actor/action. Manual four-list handoffs suffice; the architect records
+  typed blockers. Use structured outcomes only when the prompt requires them.
+  Formatting repair cannot repeat writable work or experiments.
 
 ## Reviewer
 
@@ -83,6 +87,8 @@ that should be fixed before pass unless a human waives the exact finding; P3 is
 backlog-quality work that may be carried. Dispositions are `open`,
 `closed_by_review`, `carried`, and `waived_by_human`. Coders may remediate or
 challenge; reviewers close findings; only a human waives.
+Cite original IDs and report identities when updating older findings. Passing
+unrelated work closes nothing. Inspect referenced evidence with granted tools.
 
 `pass` requires zero open P0-P2 findings. Use `blocked` when closure belongs to
 another actor or external authority, not merely because work is difficult.
@@ -104,8 +110,21 @@ and current run boundary. Admit one disposable exact-toolchain slice, establish
 hermetic verification before the baseline, schedule a real user-path smoke test
 at the integration milestone, and express budgets in operational units.
 Prompt generation requires a clean product tree; use `--allow-dirty` only to
-record an exact architect-owned baseline. A blocked review resumes only through
-`ledger.py unblock` by a human or architect, with a recorded reason.
+record an exact architect-owned baseline. Preview the actual prompt when checking
+scope. In `/2`, resume a blocker only with human/architect `ledger.py resolve`,
+recording new authority; legacy `/1` reviews retain `ledger.py unblock`.
+Notes are advisory; mandatory gates belong in acceptance. A resolution grants no
+undeclared model, canary or experiment allowance.
+
+Ledger-only acceptance remains valid. Pending commit intent permits exact recovery,
+not repeated approval, seat runs or index cleanup. Cancellation requires resolved
+Git ownership and actor/reason; changed payload needs new review. Only human may
+withdraw the commit requirement while retaining acceptance. `reconcile` rebuilds
+finding projections; never edit historical reports to repair the backlog.
+
+Upgrade selectively between stable rounds and preserve old ledger bytes. The
+`/2` roadmap rejects old writers; enable no autonomous runner without matching
+conformance qualification. Manual operation requires no frutlups installation.
 
 ## Safety
 

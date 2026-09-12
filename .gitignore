@@ -2,6 +2,7 @@
 local_state/*
 !local_state/README.md
 frutlups.local.toml
+project.local.toml
 
 # Python, tests, builds, and dependencies
 __pycache__/

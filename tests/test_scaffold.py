@@ -13,13 +13,13 @@ import tokenize
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-import _common as common  # noqa: E402
 import front_repo  # noqa: E402
 import ledger  # noqa: E402
 import prompt  # noqa: E402
@@ -82,6 +82,16 @@ EXPECTED = {
     "scripts/prompt.py",
     "scripts/roadmap.py",
     "scripts/verify.py",
+    "scripts/_protocol.py",
+    "scripts/_git.py",
+    "scripts/_commit.py",
+    "scripts/_process.py",
+    "scripts/_workspace.py",
+    "scripts/_integrity.py",
+    "scripts/_findings.py",
+    "docs/contracts.md",
+    "docs/project_checks.md",
+    "docs/upgrading.md",
 }
 LIMITS = {
     "AGENTS.md": 8_192,
@@ -92,28 +102,81 @@ LIMITS = {
     "docs/ledger.md": 6_144,
     "docs/front_repo.md": 5_120,
     "docs/memory.md": 5_120,
+    "docs/contracts.md": 12 * 1024,
+    "docs/project_checks.md": 7 * 1024,
+    "docs/upgrading.md": 8 * 1024,
     "prompts/templates/coding_prompt.md": 3_072,
     "prompts/templates/review_prompt.md": 3_072,
 }
 
 
 def project_files() -> set[str]:
-    files: set[str] = set()
-    for path in ROOT.rglob("*"):
-        rel = path.relative_to(ROOT).as_posix()
-        if path.is_file() and not rel.startswith(
-            (".git/", "tests/", "__pycache__/", "local_state/")
-        ):
-            if "/__pycache__/" not in rel and not rel.endswith((".pyc", ".pyo")):
-                files.add(rel)
-    if (ROOT / "local_state/README.md").is_file():
-        files.add("local_state/README.md")
+    # Git applies ignore rules before enumeration, avoiding cache/run-store walks.
+    top = subprocess.run(
+        ["git", "-C", str(ROOT), "rev-parse", "--show-toplevel"], capture_output=True, text=True
+    )
+    if top.returncode == 0 and Path(top.stdout.strip()).resolve() == ROOT.resolve():
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(ROOT),
+                "ls-files",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+                "-z",
+            ],
+            capture_output=True,
+            check=True,
+        )
+        paths = {os.fsdecode(value) for value in result.stdout.split(b"\0") if value}
+        return {path for path in paths if not path.startswith("tests/")}
+    # A real archive has no Git metadata; inspect only its explicitly admitted roots.
+    files = {path.name for path in ROOT.iterdir() if path.is_file()}
+    for folder in {Path(rel).parts[0] for rel in EXPECTED if "/" in rel} - {"local_state"}:
+        for here, dirs, names in os.walk(ROOT / folder):
+            dirs[:] = [
+                name
+                for name in dirs
+                if name
+                not in {
+                    "__pycache__",
+                    ".git",
+                    ".venv",
+                    "venv",
+                    "node_modules",
+                    ".cache",
+                    ".pytest_cache",
+                    ".ruff_cache",
+                    "local_state",
+                }
+            ]
+            files.update(
+                (Path(here) / name).relative_to(ROOT).as_posix()
+                for name in names
+                if not name.endswith((".pyc", ".pyo"))
+            )
+    files.add("local_state/README.md")
     return files
 
 
 class ScaffoldContractTests(unittest.TestCase):
     def test_exact_distributable_tree(self) -> None:
         self.assertEqual(project_files(), EXPECTED)
+
+    def test_inventory_does_not_borrow_an_ancestor_git_repository(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            parent = Path(name)
+            git_init(parent)
+            (parent / ".gitignore").write_text("export/\n", encoding="utf-8")
+            export = parent / "export"
+            project_copy(export)
+            cache = export / "scripts/__pycache__"
+            cache.mkdir()
+            (cache / "ignored.pyc").write_bytes(b"cache")
+            with mock.patch.object(sys.modules[__name__], "ROOT", export):
+                self.assertEqual(project_files(), EXPECTED)
 
     def test_control_files_and_budgets(self) -> None:
         self.assertEqual((ROOT / "CLAUDE.md").read_bytes(), b"@AGENTS.md\n")
@@ -141,15 +204,25 @@ class ScaffoldContractTests(unittest.TestCase):
                 len(re.findall(r"^Status: (active|inactive)$", "\n".join(lines), re.M)), 1, n
             )
 
+        # /2 adds coherent integrity/recovery boundaries and complete prompt preview.
+        # Keep a small alarm per module; do not split the public ledger command just
+        # to disguise its size, or compress readable validation syntax to pass.
         byte_limits = {
-            "_common.py": 4 * 1024,
+            "_common.py": 6 * 1024,
             "_evidence.py": 18 * 1024,
             "roadmap.py": 18 * 1024,
-            "ledger.py": 36 * 1024,
-            "verify.py": 6 * 1024,
-            "prompt.py": 15 * 1024,
+            "ledger.py": 48 * 1024,
+            "verify.py": 9 * 1024,
+            "prompt.py": 30 * 1024,
             "front_repo.py": 28 * 1024,
             "hermetic_verification.py": 6 * 1024,
+            "_protocol.py": 20 * 1024,
+            "_commit.py": 25 * 1024,  # Includes the frozen candidate-storage policy.
+            "_findings.py": 8 * 1024,  # Original-owner and non-P3 waiver guards.
+            "_git.py": 7 * 1024,
+            "_workspace.py": 6 * 1024,
+            "_process.py": 9 * 1024,
+            "_integrity.py": 16 * 1024,
         }
         for name, limit in byte_limits.items():
             path = ROOT / "scripts" / name
@@ -208,6 +281,9 @@ class ScaffoldContractTests(unittest.TestCase):
             "prior_findings",
             "report_path",
             "finding_id_rule",
+            "finding_updates",
+            "notes",
+            "outcome_contract",
         }
         for rel in ("prompts/templates/coding_prompt.md", "prompts/templates/review_prompt.md"):
             found = set(re.findall(r"{{([a-z_]+)}}", (ROOT / rel).read_text(encoding="utf-8")))
@@ -215,12 +291,15 @@ class ScaffoldContractTests(unittest.TestCase):
             self.assertLessEqual(found, known)
 
     def test_distributable_size(self) -> None:
-        self.assertLess(sum((ROOT / rel).stat().st_size for rel in EXPECTED), 170 * 1024)
+        # The measured /2 export is about 296 KiB: seven bounded stdlib helpers,
+        # dual lifecycle readers, recoverable Git, immutable prompts and three
+        # contract/upgrade guides replace the old 170 KiB scaffold allowance.
+        self.assertLess(sum((ROOT / rel).stat().st_size for rel in EXPECTED), 312 * 1024)
 
     def test_archive_excludes_template_tests(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             source, archive = Path(td) / "source", Path(td) / "project.zip"
-            tests = {"tests/test_scaffold.py", "tests/test_remediation.py"}
+            tests = {p.relative_to(ROOT).as_posix() for p in (ROOT / "tests").glob("test_*.py")}
             for rel in EXPECTED | tests:
                 target = source / rel
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -252,6 +331,12 @@ def project_copy(root: Path) -> None:
         target = root / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / rel, target)
+    # Existing cases qualify legacy /1 behavior; new protocol cases explicitly opt in.
+    path = root / "roadmap.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["schema"] = "frutlups.roadmap/1"
+    data.pop("runtime", None)
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8", newline="\n")
 
 
 def set_full(root: Path, code: str) -> None:

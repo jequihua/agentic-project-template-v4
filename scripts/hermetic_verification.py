@@ -8,6 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import _workspace
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -62,7 +63,16 @@ def run(commands=COMMANDS, project_root=ROOT):
         return 2
     project_root = Path(project_root).resolve()
     try:
-        prepared = [_command(command, project_root) for command in commands]
+        declaration = {}
+        if (project_root / "roadmap.yaml").is_file():
+            import roadmap
+
+            declaration = roadmap.load(project_root)
+        executable, _ = _workspace.resolve_runtime(project_root, declaration)
+        prepared = [
+            (_workspace.runtime_argv(argv, executable), cwd)
+            for argv, cwd in (_command(command, project_root) for command in commands)
+        ]
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 2
@@ -87,7 +97,7 @@ def run(commands=COMMANDS, project_root=ROOT):
         )
         for number, (command, cwd) in enumerate(prepared, 1):
             try:
-                result = subprocess.run(command, cwd=cwd, env=env, shell=False)
+                result = subprocess.run(command, cwd=cwd, env=env, shell=False, check=False)
             except OSError as exc:
                 print(
                     f"verification command {number} could not start: argv={command!r} "

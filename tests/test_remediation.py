@@ -3,7 +3,6 @@ from __future__ import annotations
 import contextlib
 import io
 import json
-import os
 import subprocess
 import sys
 import tempfile
@@ -189,9 +188,7 @@ class LedgerRemediationTests(unittest.TestCase):
                 rm = roadmap.load(root)
                 path = root / "05_governance/ledger.jsonl"
                 base = {"by": "architect", "slice": "M001-S01", "round": 1}
-                ledger.append(
-                    path, {**base, "ev": "prompt", "path": "p.md", "sha": SHA}, rm
-                )
+                ledger.append(path, {**base, "ev": "prompt", "path": "p.md", "sha": SHA}, rm)
                 ledger.append(path, {**base, "ev": "coded", "changed": [], "cost_usd": cost}, rm)
                 events = ledger.read(path)
                 self.assertEqual(events[-1]["cost_usd"], cost)
@@ -978,7 +975,9 @@ class AttributionAndPromptTests(unittest.TestCase):
             run_git(root, "commit", "-m", "many")
             bounded = evidence.holistic_diff(root, base, {"M001-S01": paths})
             self.assertIn("omitted by the bounded evidence gate", bounded)
-            self.assertNotIn("### M001-S01", bounded)
+            self.assertIn("### M001-S01", bounded)
+            self.assertNotIn("07_app/file_64.txt", bounded)
+            self.assertLessEqual(len(bounded.encode("utf-8")), evidence.DIFF_LIMIT + 20)
 
             detailed = evidence.holistic_diff(root, base, {"M001-S01": paths[:1]})
             self.assertIn("### M001-S01", detailed)

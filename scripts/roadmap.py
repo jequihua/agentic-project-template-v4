@@ -22,6 +22,7 @@ TOP = {
     "milestones",
     "ruled_out",
     "not_yet_specified",
+    "runtime",
 }
 MILESTONE = {"id", "title", "status", "risk", "holistic_review", "slices"}
 SLICE = {
@@ -87,8 +88,9 @@ def _commands(value, where, errors, required=False):
 def validate(data: dict) -> tuple[list[str], list[str]]:
     errors, warnings, ids = ([], [], set())
     _map(data, TOP, "roadmap", errors)
-    if data.get("schema") != "frutlups.roadmap/1":
-        errors.append("schema must be frutlups.roadmap/1")
+    v2 = data.get("schema") == "frutlups.roadmap/2"
+    if data.get("schema") not in ("frutlups.roadmap/1", "frutlups.roadmap/2"):
+        errors.append("schema must be frutlups.roadmap/1 or frutlups.roadmap/2")
     if not isinstance(data.get("project"), str) or not data.get("project", "").strip():
         errors.append("project must be a non-empty string")
     try:
@@ -96,9 +98,32 @@ def validate(data: dict) -> tuple[list[str], list[str]]:
     except ValueError as exc:
         errors.append(f"brief: {exc}")
     verification = data.get("verification")
-    if _map(verification, {"full", "focused_default"}, "verification", errors):
+    verification_keys = {"full", "focused_default"}
+    if v2:
+        verification_keys |= {"git_boundary", "observation", "timeout_seconds"}
+    if _map(verification, verification_keys, "verification", errors):
         _strings(verification.get("full"), "verification.full argv", errors, required=True)
         _commands(verification.get("focused_default", []), "verification.focused_default", errors)
+        if "git_boundary" in verification:
+            _strings(verification["git_boundary"], "verification.git_boundary", errors, True)
+        if verification.get("observation", "process") not in (
+            "process",
+            "in_process",
+            "fresh_process",
+            "clean_checkout",
+            "inspection",
+        ):
+            errors.append("invalid verification observation")
+        timeout = verification.get("timeout_seconds", 600)
+        if type(timeout) is not int or timeout <= 0:
+            errors.append("verification.timeout_seconds must be a positive integer")
+    if "runtime" in data:
+        runtime = data["runtime"]
+        if not v2:
+            errors.append("runtime requires /2 roadmap")
+        if _map(runtime, {"python"}, "runtime", errors):
+            if not re.fullmatch(r"3\.\d+(?:\.\d+)?", str(runtime.get("python", ""))):
+                errors.append("runtime.python must name a Python 3 minor or patch version")
     defaults = _paths(data.get("allowed_prefixes"), "allowed_prefixes", errors, True)
     forbidden = _paths(data.get("forbidden"), "forbidden", errors, True)
     review = data.get("review")
@@ -295,7 +320,8 @@ def main(argv=None):
             print("roadmap: ok")
             return 0
         if args.command == "render":
-            c.atomic_text(args.root / "docs/roadmap.md", render_markdown(data))
+            with c.mutation(args.root, data):
+                c.atomic_text(args.root / "docs/roadmap.md", render_markdown(data))
             print("docs/roadmap.md")
             return 0
         import ledger

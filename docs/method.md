@@ -43,11 +43,13 @@ handoffs but receives no broader authority.
 7. A pass becomes `accept_pending`. The architect accepts it, optionally making
    the exact acceptance commit. Needs-work or failed verification produces a
    new corrective round; blocked stops for the named owner. A human or architect
-   may append `unblocked` with a reason to start the next corrective round while
-   preserving the blocked findings.
+   records `/2` `resolved` with a reason and bound authority to start the next
+   corrective round, preserving the blocker. Legacy `/1` retains `unblocked`.
 
-Manual and autonomous operation use these same files and transitions. Switching
-is safe between steps because the ledger is read fresh; no conversion exists.
+Manual and compatible autonomous operation share these files and transitions.
+This `/2` candidate is manual-ready; paired conformance and mode switching still
+require qualification. Old runners refuse its roadmap. Follow `docs/upgrading.md`
+before transferring ownership, including pending attempts or Git operations.
 
 ## Acceptance envelope
 
@@ -90,12 +92,12 @@ Human records may additionally use `override`; autonomous reviewers may not.
 ## Rounds and reopening
 
 Rounds start at 1. Failed verification, a needs-work review, or an authorized
-unblock advances the next coding prompt to the following round and carries the
-relevant command tails, open findings, and unblock reason. The prompt
+resolution advances the next coding prompt to the following round and carries
+the relevant command tails, open findings, and resolution reason. The prompt
 automatically baselines exact ledger-known same-slice state; `--allow-dirty` is
-reserved for inspected unknown architect state. Transport failure
-may retry the same agent job without a new prompt event and does not consume a
-corrective round. Review later rounds only against open findings, the delta,
+reserved for inspected unknown architect state. Transport failure may use only
+a declared retry allowance; an unresolved prior invocation blocks new work.
+A retry does not consume a corrective round. Review later rounds against open findings, the delta,
 and evidence invalidated by that delta.
 
 An accepted slice may be reopened only by a human or architect record with a

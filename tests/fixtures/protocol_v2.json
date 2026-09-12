@@ -1,0 +1,639 @@
+{
+  "schema": "template.conformance/2",
+  "hash": "sha256; CRLF becomes LF only when no NUL byte occurs",
+  "cases": [
+    {
+      "name": "legacy-prefix-new-suffix",
+      "valid": true,
+      "events": [
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "prompt",
+          "path": "prompt.md",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "coded",
+          "changed": []
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "verified",
+          "receipt": "receipt.json",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "ok": true
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "reviewed",
+          "report": "review.md",
+          "sha": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "verdict": "pass",
+          "open": []
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "accepted"
+        },
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "note",
+          "text": "Explicit /2 writer suffix"
+        }
+      ],
+      "expected": {
+        "step": "accepted",
+        "round": 1
+      }
+    },
+    {
+      "name": "blocked-authority-resolution",
+      "valid": true,
+      "events": [
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "prompt",
+          "slice": "M001-S01",
+          "round": 1,
+          "path": "prompt.md",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "envelope": {
+            "path": "envelope.json",
+            "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "coded",
+          "slice": "M001-S01",
+          "round": 1,
+          "changed": [],
+          "result": "blocked_authority",
+          "manifest": {
+            "path": "changes.json",
+            "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "outcome": {
+            "path": "outcome.json",
+            "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "resolved",
+          "scope": "M001-S01",
+          "reason": "Human authority was recorded",
+          "authority": [
+            {
+              "path": "decision.md",
+              "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "step": "fix",
+        "round": 2
+      }
+    },
+    {
+      "name": "completed-seat-unknown-usage",
+      "valid": true,
+      "events": [
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "attempt_started",
+          "invocation": "review-1",
+          "scope": "M001-S01",
+          "round": 1,
+          "role": "reviewer",
+          "contract": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "allowance_seconds": 60,
+          "retry": "initial"
+        },
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "attempt_finished",
+          "invocation": "review-1",
+          "status": "completed",
+          "usage": {
+            "completeness": "unknown"
+          }
+        },
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "review_checkpoint",
+          "invocation": "review-1",
+          "scope": "M001-S01",
+          "round": 1,
+          "contract": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "report": "seat-review.md",
+          "sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "seat": "reviewer"
+        }
+      ],
+      "expected": {
+        "step": "unstarted",
+        "round": 1,
+        "checkpoints": 1
+      }
+    },
+    {
+      "name": "holistic-blocked",
+      "valid": true,
+      "events": [
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "prompt",
+          "path": "prompt.md",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "coded",
+          "changed": []
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "verified",
+          "receipt": "receipt.json",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "ok": true
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "reviewed",
+          "report": "review.md",
+          "sha": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "verdict": "pass",
+          "open": []
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "accepted"
+        },
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "holistic_reviewed",
+          "milestone": "M001",
+          "report": "holistic.md",
+          "sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "verdict": "blocked",
+          "open": [
+            "M001-S01-P2"
+          ]
+        }
+      ],
+      "expected": {
+        "step": "accepted",
+        "round": 1,
+        "holistic": "blocked"
+      }
+    },
+    {
+      "name": "holistic-needswork",
+      "valid": true,
+      "events": [
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "prompt",
+          "path": "prompt.md",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "coded",
+          "changed": []
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "verified",
+          "receipt": "receipt.json",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "ok": true
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "reviewed",
+          "report": "review.md",
+          "sha": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "verdict": "pass",
+          "open": []
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "accepted"
+        },
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "holistic_reviewed",
+          "milestone": "M001",
+          "report": "holistic.md",
+          "sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "verdict": "needs_work",
+          "open": [
+            "M001-S01-P2"
+          ]
+        }
+      ],
+      "expected": {
+        "step": "fix",
+        "round": 2,
+        "holistic": "fix"
+      }
+    },
+    {
+      "name": "holistic-pass-explicit-close",
+      "valid": true,
+      "events": [
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "prompt",
+          "path": "prompt.md",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "coded",
+          "changed": []
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "verified",
+          "receipt": "receipt.json",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "ok": true
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "reviewed",
+          "report": "review.md",
+          "sha": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "verdict": "pass",
+          "open": []
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "accepted"
+        },
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "holistic_reviewed",
+          "milestone": "M001",
+          "report": "holistic.md",
+          "sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "verdict": "pass",
+          "open": []
+        },
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "milestone_done",
+          "milestone": "M001",
+          "holistic_report": "holistic.md"
+        }
+      ],
+      "expected": {
+        "step": "accepted",
+        "round": 1,
+        "done": true
+      }
+    },
+    {
+      "name": "optional-approval-intent",
+      "valid": true,
+      "events": [
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "prompt",
+          "path": "prompt.md",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "coded",
+          "changed": []
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "verified",
+          "receipt": "receipt.json",
+          "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "ok": true
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "slice": "M001-S01",
+          "round": 1,
+          "ev": "reviewed",
+          "report": "review.md",
+          "sha": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "verdict": "pass",
+          "open": []
+        },
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "accepted",
+          "slice": "M001-S01",
+          "round": 1,
+          "commit_intent": {
+            "id": "11111111111111111111111111111111",
+            "parent": "2222222222222222222222222222222222222222",
+            "manifest": {
+              "path": "commit-manifest.json",
+              "sha": "0ffa37d4e1615b75e2bfe14b13a8c0a73bbb2e5b55796989dac3eddccfad98ff"
+            },
+            "message": "Accept M001-S01"
+          }
+        }
+      ],
+      "expected": {
+        "step": "accepted",
+        "round": 1,
+        "intents": 1
+      }
+    },
+    {
+      "name": "illegal-version-reversal",
+      "valid": false,
+      "events": [
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "note",
+          "text": "new"
+        },
+        {
+          "schema": "frutlups.ledger/1",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "note",
+          "text": "old"
+        }
+      ]
+    },
+    {
+      "name": "unknown-output-contract",
+      "valid": false,
+      "events": [
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "note",
+          "text": "unknown fields refused",
+          "capability": "automatic"
+        }
+      ]
+    },
+    {
+      "name": "unresolved-invocation-cannot-redispatch",
+      "valid": false,
+      "events": [
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "attempt_started",
+          "invocation": "review-1",
+          "scope": "M001-S01",
+          "round": 1,
+          "role": "reviewer",
+          "contract": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "allowance_seconds": 60,
+          "retry": "initial"
+        },
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "attempt_started",
+          "invocation": "review-2",
+          "scope": "M001-S01",
+          "round": 1,
+          "role": "reviewer",
+          "contract": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "allowance_seconds": 60,
+          "retry": "initial"
+        }
+      ]
+    },
+    {
+      "name": "checkpoint-cannot-change-round",
+      "valid": false,
+      "events": [
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "attempt_started",
+          "invocation": "review-1",
+          "scope": "M001-S01",
+          "round": 1,
+          "role": "reviewer",
+          "contract": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "allowance_seconds": 60,
+          "retry": "initial"
+        },
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "attempt_finished",
+          "invocation": "review-1",
+          "status": "completed",
+          "usage": {
+            "completeness": "unknown"
+          }
+        },
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "review_checkpoint",
+          "invocation": "review-1",
+          "scope": "M001-S01",
+          "round": 2,
+          "contract": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "report": "seat-review.md",
+          "sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "seat": "reviewer"
+        }
+      ]
+    },
+    {
+      "name": "nonhuman-retains-acceptance",
+      "valid": false,
+      "events": [
+        {
+          "schema": "frutlups.ledger/2",
+          "t": "2026-09-12T00:00:00Z",
+          "by": "architect",
+          "ev": "commit_cancelled",
+          "operation": "11111111111111111111111111111111",
+          "reason": "Unfinishable policy",
+          "retain_acceptance": true
+        }
+      ]
+    }
+  ],
+  "finding_update": {
+    "text": "# Review: M001-S01 round 2\n\n## Findings\n| id | severity | disposition | summary |\n| --- | --- | --- | --- |\n\n## Finding updates\n| source | sha | id | disposition | related |\n| --- | --- | --- | --- | --- |\n| reviews/original.md | aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa | PRIOR-1 | closed_by_review | PRIOR-2 |\n\n## Closure Decision\nObjective status: achieved\nObjective evidence: Explicit partial closure sample.\n\n## Verdict\nVerdict: pass - next: accept\n",
+    "expected": [
+      {
+        "source": "reviews/original.md",
+        "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "id": "PRIOR-1",
+        "disposition": "closed_by_review",
+        "related": [
+          "PRIOR-2"
+        ]
+      }
+    ]
+  },
+  "commit_manifest": {
+    "text": "{\"entries\":[],\"git_boundary\":null,\"id\":\"11111111111111111111111111111111\",\"index_tree\":\"3333333333333333333333333333333333333333\",\"ledger\":{\"path\":\"05_governance/ledger.jsonl\",\"prefix_sha\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"},\"parent\":\"2222222222222222222222222222222222222222\",\"schema\":\"frutlups.commit-manifest/1\",\"scope\":\"M001-S01\"}\n",
+    "intent": {
+      "id": "11111111111111111111111111111111",
+      "parent": "2222222222222222222222222222222222222222",
+      "manifest": {
+        "path": "commit-manifest.json",
+        "sha": "0ffa37d4e1615b75e2bfe14b13a8c0a73bbb2e5b55796989dac3eddccfad98ff"
+      },
+      "message": "Accept M001-S01"
+    },
+    "scope": "M001-S01",
+    "expected": {
+      "schema": "frutlups.commit-manifest/1",
+      "id": "11111111111111111111111111111111",
+      "scope": "M001-S01",
+      "parent": "2222222222222222222222222222222222222222",
+      "index_tree": "3333333333333333333333333333333333333333",
+      "entries": [],
+      "ledger": {
+        "path": "05_governance/ledger.jsonl",
+        "prefix_sha": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "git_boundary": null
+    }
+  }
+}

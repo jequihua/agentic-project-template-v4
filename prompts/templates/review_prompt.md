@@ -9,6 +9,36 @@ evidence; do not rerun verification unless this prompt explicitly says so.
 
 {{acceptance}}
 
+## Non-goals
+
+{{non_goals}}
+
+## Read first
+
+{{read_first}}
+
+## Implementation boundary
+
+Allowed prefixes: {{allowed_prefixes}}
+
+Forbidden: {{forbidden}} and all other paths. These describe the coder's scope;
+review remains product-read-only. Read the evidence artifacts named below using
+your file-reading tools. Their categories describe volume, not authority.
+
+## Declared verification
+
+Focused:
+
+{{focused}}
+
+Full:
+
+{{full}}
+
+## Advisory notes
+
+{{notes}}
+
 ## Changed files
 
 {{diff_manifest}}
@@ -54,3 +84,5 @@ Verdict: pass|needs_work|blocked - next: one move
 
 Return the report as the plain text of your final message, in exactly this shape, not enclosed in a code fence. Use one allowed value on each choice line. A pass requires zero open P0-P2.
 {{finding_id_rule}}
+
+{{finding_updates}}

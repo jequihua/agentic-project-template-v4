@@ -1,4 +1,5 @@
 # Optional autonomous-run configuration. Manual scripts never read this file.
+# The /2 roadmap requires a paired, qualified runner; frutlups 0.3.2 refuses it.
 schema = "frutlups/1"
 until = "milestone"
 max_corrective_rounds = 2

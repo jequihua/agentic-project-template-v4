@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import tempfile
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -15,6 +16,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 HASH_CHUNK = 64 * 1024
+_LOCKS = {}
 
 
 def now() -> str:
@@ -121,3 +123,62 @@ def git(root: Path, *args: str, check: bool = True, text: bool = False):
 
 def status_bytes(root: Path) -> bytes:
     return git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all").stdout
+
+
+@contextmanager
+def writer_lock(root):
+    """One OS-owned byte lock, shared by manual writers and compatible runners."""
+    result = git(root, "rev-parse", "--git-common-dir", text=True, check=False)
+    if result.returncode:
+        # Preserve the legacy standalone ledger/render API. A /2 writer always
+        # needs a Git repository so it cannot bypass interoperable ownership.
+        config = Path(root) / "roadmap.yaml"
+        if config.is_file() and load_yaml(config).get("schema") == "frutlups.roadmap/1":
+            yield
+            return
+        raise ValueError("initialize the project Git repository before mutating /2 state")
+    common_dir = result.stdout.strip()
+    folder = (Path(root) / common_dir).resolve()
+    key = str(folder)
+    if key in _LOCKS:
+        yield
+        return
+    path = folder / "frutlups-writer.lock"
+    with path.open("a+b") as stream:
+        stream.seek(0, 2)
+        if not stream.tell():
+            stream.write(b"\0")
+            stream.flush()
+        stream.seek(0)
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            raise ValueError(
+                "another writer owns the repository; status remains available"
+            ) from exc
+        _LOCKS[key] = stream
+        try:
+            yield
+        finally:
+            _LOCKS.pop(key, None)
+            stream.seek(0)
+            if os.name == "nt":
+                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+
+
+@contextmanager
+def mutation(root, rm=None):
+    with writer_lock(root):
+        import _protocol
+
+        _protocol.ensure_writable(root, rm)
+        yield
