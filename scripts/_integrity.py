@@ -347,6 +347,7 @@ def require_active(root, current, events, extra=()):
     baseline = {
         row["path"]: row for row in current.get("baseline", []) if row["path"] not in excluded
     }
+    mismatched = []
     for rel, row in {**baseline, **rows}.items():
         path = c.repo_path(root, rel)
         matches = (
@@ -358,9 +359,20 @@ def require_active(root, current, events, extra=()):
             and not path.is_symlink()
             and c.sha(path) == row["sha"]
         )
-        if not matches and current["step"] == "accepted":
-            matches = _evidence.matches_head(root, rel)
-        p.need(matches, "active product differs from recorded evidence: " + rel)
+        if not matches:
+            p.need(
+                current["step"] == "accepted",
+                "active product differs from recorded evidence: " + rel,
+            )
+            mismatched.append(rel)
+    heads = _evidence.head_shas(
+        root, [rel for rel in mismatched if not c.repo_path(root, rel).is_symlink()]
+    )
+    for rel in mismatched:
+        p.need(
+            _evidence.matches_head(root, rel, heads=heads),
+            "active product differs from recorded evidence: " + rel,
+        )
     dirty = _evidence.changed_files(root)
     unexpected = sorted({row["path"] for row in dirty} - set(rows) - set(baseline) - excluded)
     p.need(not unexpected, "unrecorded product changes: " + ", ".join(unexpected[:8]))

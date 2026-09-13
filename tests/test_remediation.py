@@ -180,6 +180,43 @@ class EvidenceHashTests(unittest.TestCase):
 
 
 class LedgerRemediationTests(unittest.TestCase):
+    def test_coded_cli_records_original_hashes_for_many_deletions(self):
+        from test_prompts_v2 import fixture
+
+        for count in (50, 700):
+            with self.subTest(count=count), tempfile.TemporaryDirectory() as name:
+                root = Path(name)
+                fixture(root)
+                expected = []
+                for number in range(count):
+                    rel = f"07_app/file-{number:04d}.txt"
+                    (root / rel).write_bytes(f"original {number}\n".encode())
+                    expected.append({"path": rel, "sha": common.sha(root / rel), "kind": "deleted"})
+                run_git(root, "add", ".")
+                run_git(root, "commit", "-qm", "deletion baseline")
+                prompt.coding(root, "M001-S01")
+                for row in expected:
+                    (root / row["path"]).unlink()
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-B",
+                        str(root / "scripts/ledger.py"),
+                        "--root",
+                        str(root),
+                        "coded",
+                        "M001-S01",
+                    ],
+                    capture_output=True,
+                    timeout=60,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                events = ledger.read(root / "05_governance/ledger.jsonl")
+                coded = next(event for event in reversed(events) if event["ev"] == "coded")
+                self.assertEqual(coded["changed"], expected)
+                manifest = json.loads((root / coded["manifest"]["path"]).read_text())
+                self.assertEqual(manifest["changed"], [{**row, "round": 1} for row in expected])
+
     def test_coded_cost_validates_persists_and_folds(self) -> None:
         for cost in (0, 2, 0.125):
             with self.subTest(cost=cost), tempfile.TemporaryDirectory() as name:

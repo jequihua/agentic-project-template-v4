@@ -184,35 +184,61 @@ def changed_files(root):
         if path.is_symlink():
             raise ValueError(f"changed path is a symlink: {rel}")
         if kind == "deleted":
-            digest = head_sha(root, rel)
-            if digest is None:
-                raise ValueError("deleted path has no HEAD blob: " + rel)
+            digest = None
         elif path.is_file():
             digest = c.sha(path)
         else:
             raise ValueError(f"changed path is not a regular file: {rel}")
         output.append({"path": rel, "sha": digest, "kind": kind})
+    deleted = head_shas(root, [row["path"] for row in output if row["kind"] == "deleted"])
+    for row in output:
+        if row["kind"] == "deleted":
+            row["sha"] = deleted[row["path"]]
+            if row["sha"] is None:
+                raise ValueError("deleted path has no HEAD blob: " + row["path"])
     return output
 
 
-def head_sha(root, rel):
-    """Return a path's normalized HEAD blob hash, or None when HEAD lacks it."""
+def head_shas(root, paths):
+    """Batch normalized HEAD blob hashes; None means no blob at that exact path."""
+    import _commit
     import _git as gitops
 
-    rel = c.safe_rel(rel)
-    result = gitops.run(root, "rev-parse", "--verify", f"HEAD:{rel}", limit=1024, check=False)
+    paths = list(dict.fromkeys(c.safe_rel(path) for path in paths))
+    if not paths:
+        return {}
+    result = gitops.run(root, "rev-parse", "--verify", "HEAD^{commit}", limit=1024, check=False)
     if result.returncode:
-        return None
-    oid = result.stdout.decode("ascii").strip()
-    return gitops.blob_hashes(root, [oid])[oid]["normalized"]
+        branch = gitops.run(root, "symbolic-ref", "-q", "HEAD", limit=1024).stdout.decode().strip()
+        if (
+            branch.startswith("refs/heads/")
+            and gitops.run(
+                root, "show-ref", "--verify", "--quiet", branch, check=False, limit=1024
+            ).returncode
+            == 1
+        ):
+            return dict.fromkeys(paths)
+        raise ValueError("HEAD is neither an available commit nor an unborn branch")
+    tree = _commit._tree(root, result.stdout.decode("ascii").strip())
+    selected = {path: tree[path][2] for path in paths if path in tree}
+    if any(tree[path][1] != "blob" for path in selected):
+        raise ValueError("commit content is not an available blob")
+    hashes = gitops.blob_hashes(root, selected.values())
+    return {
+        path: hashes[selected[path]]["normalized"] if path in selected else None for path in paths
+    }
 
 
-def matches_head(root, rel):
+def head_sha(root, rel):
+    return head_shas(root, [rel])[rel]
+
+
+def matches_head(root, rel, *, heads=None):
     """Whether the current regular file or absence is identical to HEAD."""
     path = c.repo_path(root, c.safe_rel(rel))
     if path.is_symlink():
         return False
-    digest = head_sha(root, rel)
+    digest = head_sha(root, rel) if heads is None else heads[rel]
     if digest is None:
         return not path.exists()
     return path.is_file() and c.sha(path) == digest
@@ -253,21 +279,23 @@ def prompt_baseline(root, rm, events, sid, allow_dirty=False, prospective=()):
         if event["ev"] == "coded" and event["slice"] == sid
         for item in event["changed"]
     }
-    known = []
-    unknown = []
-    for item in changed:
-        identity = (item["path"], item["sha"], item["kind"])
-        if item["path"] in known_paths or identity in products or matches_head(root, item["path"]):
-            known.append(item)
-        else:
-            unknown.append(item)
+    unexplained = [
+        row
+        for row in changed
+        if row["path"] not in known_paths and (row["path"], row["sha"], row["kind"]) not in products
+    ]
+    heads = head_shas(
+        root,
+        [row["path"] for row in unexplained if not c.repo_path(root, row["path"]).is_symlink()],
+    )
+    unknown = [row for row in unexplained if not matches_head(root, row["path"], heads=heads)]
     if unknown and not allow_dirty:
         paths = ", ".join(item["path"] for item in unknown)
         raise ValueError(
             "unknown dirty paths must be committed or stashed: "
             f"{paths}; inspect them before using --allow-dirty"
         )
-    return changed if allow_dirty else known
+    return changed
 
 
 def fence(changed, allowed, forbidden):

@@ -99,7 +99,7 @@ LIMITS = {
     "ENVIRONMENT.md": 3_072,
     "docs/method.md": 15_360,
     "docs/operating.md": 12_288,
-    "docs/ledger.md": 6_144,
+    "docs/ledger.md": 7 * 1024,  # V050-21: 1 KiB maintenance reserve after HEAD guidance.
     "docs/front_repo.md": 5_120,
     "docs/memory.md": 5_120,
     "docs/contracts.md": 15 * 1024,
@@ -209,7 +209,7 @@ class ScaffoldContractTests(unittest.TestCase):
         # to disguise its size, or compress readable validation syntax to pass.
         byte_limits = {
             "_common.py": 9 * 1024,
-            "_evidence.py": 20 * 1024,  # Bound Git metadata and preserve readable context.
+            "_evidence.py": 21 * 1024,  # V050-21: 1 KiB reserve; keep the total export cap.
             "roadmap.py": 18 * 1024,
             "ledger.py": 48 * 1024,
             "verify.py": 9 * 1024,

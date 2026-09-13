@@ -490,6 +490,7 @@ def check(root, rm, events):
         if event["ev"] == "coded":
             for item in event["changed"]:
                 latest[item["path"]] = item
+    mismatched = []
     for rel, item in latest.items():
         path = c.repo_path(root, rel)
         matches_latest = (
@@ -501,9 +502,15 @@ def check(root, rm, events):
             and not path.is_symlink()
             and c.sha(path) == item["sha"]
         )
-        if matches_latest or evidence.matches_head(root, rel):
+        if not matches_latest:
+            mismatched.append(rel)
+    heads = evidence.head_shas(
+        root, [rel for rel in mismatched if not c.repo_path(root, rel).is_symlink()]
+    )
+    for rel in mismatched:
+        if evidence.matches_head(root, rel, heads=heads):
             continue
-        if item["kind"] == "deleted":
+        if latest[rel]["kind"] == "deleted":
             errors.append(f"drift: {rel} was deleted")
         else:
             errors.append(f"drift: {rel}")

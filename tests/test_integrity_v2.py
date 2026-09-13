@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import yaml
 
@@ -15,6 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import _common as c
 import _integrity
+import _evidence
+import _git
 import ledger
 import prompt
 import roadmap
@@ -48,6 +51,54 @@ def replace_ref(root, events, ev, key, mutate):
 
 
 class IntegrityTests(unittest.TestCase):
+    def test_accepted_hotfix_fallback_is_batched_and_active_work_stays_strict(self):
+        from test_prompts_v2 import fixture
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            fixture(root)
+            prompt.coding(root, "M001-S01")
+            paths = [f"07_app/{number:03d}.txt" for number in range(50)]
+            for rel in paths:
+                (root / rel).write_text("coded " + rel)
+            self.assertEqual(quiet_call(ledger.main, ["--root", str(root), "coded", "M001-S01"]), 0)
+            self.assertTrue(verify.run(root, "M001-S01", 10)[0]["ok"])
+            events = ledger.read(root / "05_governance/ledger.jsonl")
+            rm = roadmap.load(root)
+            current = ledger.fold(events, rm)["slices"]["M001-S01"]
+            with mock.patch.object(_evidence, "head_shas", wraps=_evidence.head_shas) as heads:
+                _integrity.require_active(root, current, events)
+            self.assertTrue(all(not call.args[1] for call in heads.call_args_list))
+            (root / paths[0]).write_text("unreviewed drift")
+            with mock.patch.object(
+                _evidence, "head_shas", side_effect=AssertionError("active fallback")
+            ):
+                with self.assertRaisesRegex(ValueError, "active product differs"):
+                    _integrity.require_active(root, current, events)
+            (root / paths[0]).write_text("coded " + paths[0])
+            report = "05_governance/reviews/pass.md"
+            (root / report).write_text(PASS_REPORT)
+            for args in (("record", report), ("accept", "M001-S01")):
+                self.assertEqual(quiet_call(ledger.main, ["--root", str(root), *args]), 0)
+            run_git(root, "add", ".")
+            run_git(root, "commit", "-qm", "ledger-only acceptance")
+            events = ledger.read(root / "05_governance/ledger.jsonl")
+            current = ledger.fold(events, rm)["slices"]["M001-S01"]
+            with mock.patch.object(
+                _git, "run", side_effect=AssertionError("matching rows need no Git")
+            ):
+                self.assertEqual(ledger.check(root, rm, events), [])
+            for rel in paths:
+                (root / rel).write_text("owner hotfix " + rel)
+            run_git(root, "add", ".")
+            run_git(root, "commit", "-qm", "owner hotfix")
+            with c.command_scope(), mock.patch.object(_git, "run", wraps=_git.run) as calls:
+                _integrity.require_active(root, current, events)
+            self.assertEqual(calls.call_count, 5)
+            with c.command_scope(), mock.patch.object(_git, "run", wraps=_git.run) as calls:
+                self.assertEqual(ledger.check(root, rm, events), [])
+            self.assertEqual(calls.call_count, 4)
+
     def test_shared_accepted_path_closes_and_reopened_scope_reobserves_new_identity(self):
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)

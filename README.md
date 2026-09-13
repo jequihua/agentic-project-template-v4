@@ -1,7 +1,7 @@
 # Agentic Project Template v4
 
 A compact, artifact-first harness for manual software-development loops. This
-`/2` protocol candidate prepares shared contracts for a future compatible runner.
+manual release uses `/2` and prepares shared contracts for a future compatible runner.
 Manual operation needs only Python 3.11+, PyYAML and Git. No frutlups installation
 is needed. frutlups 0.3.2 does not support `/2`; autonomous compatibility and the
 paired live canary remain pending. See `docs/upgrading.md` before upgrading an

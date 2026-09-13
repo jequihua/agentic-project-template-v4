@@ -51,7 +51,11 @@ def _tree(root, revision):
             continue
         info, path = row.split(b"\t", 1)
         mode, kind, oid = info.decode("ascii").split()
-        output[c.safe_rel(path.decode("utf-8"))] = (mode, kind, oid)
+        try:
+            rel = path.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError(f"Git tree path is not valid UTF-8: {path!r}") from exc
+        output[c.safe_rel(rel)] = (mode, kind, oid)
     if cache is not None and cache.get(None, 0) + len(data) <= g.OUTPUT_LIMIT:
         cache[key] = output
         cache[None] = cache.get(None, 0) + len(data)
