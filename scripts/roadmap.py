@@ -23,6 +23,7 @@ TOP = {
     "ruled_out",
     "not_yet_specified",
     "runtime",
+    "autonomy",
 }
 MILESTONE = {"id", "title", "status", "risk", "holistic_review", "slices"}
 SLICE = {
@@ -91,6 +92,9 @@ def validate(data: dict) -> tuple[list[str], list[str]]:
     v2 = data.get("schema") == "frutlups.roadmap/2"
     if data.get("schema") not in ("frutlups.roadmap/1", "frutlups.roadmap/2"):
         errors.append("schema must be frutlups.roadmap/1 or frutlups.roadmap/2")
+    if "autonomy" in data:
+        if not v2 or data["autonomy"] != {"schema": "frutlups.autonomy/1"}:
+            errors.append("autonomy requires /2 and exactly {schema: frutlups.autonomy/1}")
     if not isinstance(data.get("project"), str) or not data.get("project", "").strip():
         errors.append("project must be a non-empty string")
     try:

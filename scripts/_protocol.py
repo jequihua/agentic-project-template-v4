@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 import _common as c
+import _autonomy
 
 SCHEMA = "frutlups.ledger/2"
 EVENT_LIMIT = 2 * 1024 * 1024
@@ -83,7 +84,9 @@ def validate(event, legacy_validate):
     )
     datetime.fromisoformat(event["t"].replace("Z", "+00:00"))
     need(ev != "unblocked", "/2 resolution requires an authority-bound resolved event")
-    if ev in FIELDS:
+    if ev in _autonomy.EVENTS:
+        _autonomy.validate(event)
+    elif ev in FIELDS:
         keys = set(event) - {"schema", "t", "ev", "by"}
         required = FIELDS[ev] - OPTIONAL.get(ev, set())
         need(required <= keys <= FIELDS[ev], f"invalid {ev} fields")
@@ -175,7 +178,10 @@ def validate(event, legacy_validate):
             "invalid round",
         )
     if ev == "attempt_started":
-        need(event["role"] in ("coder", "reviewer", "holistic", "probe"), "invalid attempt role")
+        need(
+            event["role"] in ("coder", "reviewer", "holistic", "probe", "verification"),
+            "invalid attempt role",
+        )
         need(event["retry"] in ("initial", "transport", "format"), "invalid retry")
         need(
             type(event["allowance_seconds"]) is int and event["allowance_seconds"] > 0,

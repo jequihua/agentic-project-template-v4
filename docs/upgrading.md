@@ -130,7 +130,7 @@ findings. See [operating](operating.md) for the ordinary loop and crash recovery
 
 ## Qualification handoff
 
-Record the tested identity, toolchain, results and limitations. Local synthetic
-tests do not qualify model adapters, T40/F40 mode switching, autonomous budgets
-or F41's paired live canary. Upgrading authorizes no host cleanup, experiment
-rerun, paid invocation or publication.
+Record tested identities and limits; local tests do not qualify adapters,
+T40/F40 mode switching or F41. Upgrading grants no paid work or publication.
+The optional [autonomy profile](autonomy.md) has its own strict gate and
+pre-admission history restrictions; ordinary manual projects need no opt-in.

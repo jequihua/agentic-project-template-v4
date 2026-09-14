@@ -205,6 +205,10 @@ it cannot turn that coder outcome into a review checkpoint. Compatible runner
 admission/reservation limits remain runner-owned; ordinary manual use needs none
 of these events.
 
+The optional [autonomy profile](autonomy.md) adds gated native run grants,
+aggregate reservation checks and a verification attempt role. Its declaration
+is absent by default; existing `/2` attempts retain their base meaning without it.
+
 ## Qualification boundary
 
 The template's synthetic corpus and tests specify locally executable semantics.

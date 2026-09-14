@@ -16,6 +16,7 @@ import _protocol as protocol
 import _git as gitops
 import _findings as findings
 import _integrity as integrity
+import _autonomy
 
 
 SCHEMA = "frutlups.ledger/1"
@@ -241,6 +242,8 @@ def fold(events, rm):
         _need(not is_v2 or rm["schema"] == protocol.ROADMAP, "/2 history requires /2 roadmap")
         _need(not upgraded or is_v2, "legacy event after /2 history")
         upgraded = upgraded or is_v2
+        if _autonomy.apply(event, rm, states, done, extras):
+            continue
         if is_v2 and protocol.apply(event, states, milestones, done, extras):
             continue
         ev = event["ev"]
@@ -352,6 +355,7 @@ def fold(events, rm):
             valid = state["step"] == "blocked" and round_no == state["round"] + 1
             _need(valid, f"{sid}: unblocked out of order")
             state.update(step="fix", round=round_no, unblock_reason=event["reason"])
+    _autonomy.validate_history(rm, states, done, extras)
     return {"slices": states, "milestones_done": done, "events": len(events), **extras}
 
 
@@ -365,6 +369,14 @@ def _append(path: c.Path, event, rm):
     candidate = {"schema": schema, "t": c.now(), **event}
     _need(candidate["schema"] == schema, "writer schema differs from declared roadmap")
     _validate(candidate)
+    if candidate["ev"] == "run_admitted":
+        _need(
+            any(
+                x["id"] == candidate["milestone"] and x["status"] == "active"
+                for x in rm["milestones"]
+            ),
+            "run admission requires active milestone",
+        )
     events = read(path)
     if path.exists():
         data = path.read_bytes()
@@ -385,9 +397,8 @@ def _append(path: c.Path, event, rm):
             _commit.cancel_check(path.resolve().parents[1], events, rm, candidate["operation"])
         else:
             root = path.resolve().parents[1]
-            errors = artifact_errors(root, [candidate]) + integrity.errors(
-                root, events + [candidate], rm
-            )
+            bound = events + [candidate] if "autonomy" in rm else [candidate]
+            errors = artifact_errors(root, bound) + integrity.errors(root, events + [candidate], rm)
             _need(not errors, "invalid immutable evidence: " + ", ".join(errors))
     fold(events + [candidate], rm)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -584,6 +595,7 @@ def _parser():
     item.add_argument("--by", choices=("human", "architect"), default="human")
     item = sub.add_parser("attempt")
     item.add_argument("event", help="JSON attempt_started/attempt_finished/review_checkpoint")
+    _autonomy.configure_parser(sub)
     sub.add_parser("reconcile")
     sub.add_parser("status")
     item = sub.add_parser("index")
@@ -1030,7 +1042,11 @@ def _execute(args):
                 append(ledger_path, event, rm)
                 print(f"{args.slice} {event['ev']} r{event['round']}")
             elif args.command == "status":
+                if "autonomy" in rm:
+                    require_artifacts(root, events)
                 print(status_text(rm, state))
+                for line in _autonomy.status(state):
+                    print(line)
                 if rm["schema"] == protocol.ROADMAP:
                     import _commit
 
@@ -1054,6 +1070,8 @@ def _execute(args):
                             print(
                                 f"warning: {milestone['id']} declared done without ledger closure"
                             )
+            elif args.command == "run":
+                _autonomy.execute(root, args, rm, events, state)
             elif args.command == "resolve":
                 require_artifacts(root, events)
                 append(

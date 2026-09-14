@@ -107,3 +107,6 @@ to current-round paths, not prior-round deltas; manifests remain cumulative.
 Bounded diff pages need only file tools. Coding/review caps are 16/48 KiB UTF-8,
 including custom framing; mandatory instructions are never truncated.
 `prompt.py --preview` shows actual text without reserving names or writing evidence.
+
+Optional [run admission](autonomy.md) adds `ledger.py run admit|extend` and balances
+to status. Ordinary manual work requires no autonomous profile or run records.

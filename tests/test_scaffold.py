@@ -83,6 +83,7 @@ EXPECTED = {
     "scripts/roadmap.py",
     "scripts/verify.py",
     "scripts/_protocol.py",
+    "scripts/_autonomy.py",
     "scripts/_git.py",
     "scripts/_commit.py",
     "scripts/_process.py",
@@ -90,6 +91,7 @@ EXPECTED = {
     "scripts/_integrity.py",
     "scripts/_findings.py",
     "docs/contracts.md",
+    "docs/autonomy.md",
     "docs/project_checks.md",
     "docs/upgrading.md",
 }
@@ -103,8 +105,9 @@ LIMITS = {
     "docs/front_repo.md": 5_120,
     "docs/memory.md": 5_120,
     "docs/contracts.md": 15 * 1024,
+    "docs/autonomy.md": 12 * 1024,  # Q001-04: explicit lifecycle/retry guidance with reserve.
     "docs/project_checks.md": 7 * 1024,
-    "docs/upgrading.md": 8 * 1024,
+    "docs/upgrading.md": 9 * 1024,  # Q001-04: stop repeated prose trimming for the old cap.
     "prompts/templates/coding_prompt.md": 3_072,
     "prompts/templates/review_prompt.md": 3_072,
 }
@@ -211,12 +214,13 @@ class ScaffoldContractTests(unittest.TestCase):
             "_common.py": 9 * 1024,
             "_evidence.py": 21 * 1024,  # V050-21: 1 KiB reserve; keep the total export cap.
             "roadmap.py": 18 * 1024,
-            "ledger.py": 48 * 1024,
+            "ledger.py": 49 * 1024,  # Q001: optional run command/status integration reserve.
             "verify.py": 9 * 1024,
             "prompt.py": 35 * 1024,
             "front_repo.py": 28 * 1024,
             "hermetic_verification.py": 6 * 1024,
-            "_protocol.py": 22 * 1024,  # Strict readers and command-scoped immutable JSON reads.
+            "_protocol.py": 23 * 1024,  # Q001: gated native event and verification-role hooks.
+            "_autonomy.py": 16 * 1024,  # Q001: isolated optional validation/fold/command boundary.
             "_commit.py": 28 * 1024,  # Bounded blob batches and exact witness recovery.
             "_findings.py": 12 * 1024,  # Linear projection and preserved legacy meaning.
             "_git.py": 10 * 1024,  # Shared bounded object hashing, no aggregate payload ceiling.
@@ -291,10 +295,9 @@ class ScaffoldContractTests(unittest.TestCase):
             self.assertLessEqual(found, known)
 
     def test_distributable_size(self) -> None:
-        # Review remediation keeps a 360 KiB distribution alarm: bounded stdlib helpers,
-        # dual lifecycle readers, recoverable Git, immutable prompts and three
-        # contract/upgrade guides replace the old 170 KiB scaffold allowance.
-        self.assertLess(sum((ROOT / rel).stat().st_size for rel in EXPECTED), 360 * 1024)
+        # Q001-04: 24 KiB maintenance reserve for the evidenced optional run contract.
+        # This 384 KiB alarm is a ceiling, not a content target; retain per-file alarms.
+        self.assertLess(sum((ROOT / rel).stat().st_size for rel in EXPECTED), 384 * 1024)
 
     def test_archive_excludes_template_tests(self) -> None:
         with tempfile.TemporaryDirectory() as td:
